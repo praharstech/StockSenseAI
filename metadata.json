@@ -1,0 +1,7 @@
+{
+  "name": "StockSense AI",
+  "description": "A smart stock analyzer that tracks your positions, calculates break-even points, and uses AI to forecast future price movements based on real-time market data.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
