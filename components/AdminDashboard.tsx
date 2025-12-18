@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { getDashboardStats, getLogs } from '../services/trackingService';
 import { 
@@ -9,8 +10,7 @@ import {
 import { 
   Users, Search, MapPin, Lock, LogOut, 
   TrendingUp, Activity, Megaphone, Lightbulb, Trash2, Plus, 
-  Key, ShieldCheck, Mail, Phone, Briefcase, 
-  Target, Send, X
+  Key, ShieldCheck, Target, Send, X, Briefcase
 } from 'lucide-react';
 import { ActivityLog, ManualAd, ManualSuggestion, UserProfile } from '../types';
 
@@ -102,7 +102,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             <input 
               type="password" 
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:border-red-500 outline-none"
               placeholder="Enter Admin Password"
               required
@@ -127,9 +127,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         </div>
         
         <div className="flex flex-wrap bg-slate-900 p-1 rounded-2xl border border-slate-800">
-          {(['ACTIVITY', 'USERS', 'ADS', 'SUGGESTIONS'] as const).map(tabId => {
-            const icons = { ACTIVITY: Activity, USERS: Users, ADS: Megaphone, SUGGESTIONS: Lightbulb };
-            const labels = { ACTIVITY: 'Stats', USERS: 'Users', ADS: 'Ads', SUGGESTIONS: 'Pro Tips' };
+          {(['ACTIVITY', 'USERS', 'ADS', 'SUGGESTIONS'] as const).map((tabId: Tab) => {
+            const icons: Record<Tab, React.ElementType> = { ACTIVITY: Activity, USERS: Users, ADS: Megaphone, SUGGESTIONS: Lightbulb };
+            const labels: Record<Tab, string> = { ACTIVITY: 'Stats', USERS: 'Users', ADS: 'Ads', SUGGESTIONS: 'Pro Tips' };
             const IconComp = icons[tabId];
             return (
               <button 
@@ -170,7 +170,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {users.map(user => (
+                {users.map((user: UserProfile) => (
                   <tr key={user.email} className="hover:bg-white/5 transition-colors">
                     <td className="p-4">
                       <div className="text-white font-bold">{user.name}</div>
@@ -182,7 +182,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     </td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1">
-                        {getUserSearchInterests(user.email).map(s => (
+                        {getUserSearchInterests(user.email).map((s: string) => (
                           <span key={s} className="bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded text-[10px] font-bold">{s}</span>
                         ))}
                         {getUserSearchInterests(user.email).length === 0 && <span className="text-slate-700 text-[10px]">No searches yet</span>}
@@ -220,7 +220,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 <Input label="Symbol" val={sugForm.symbol} onChange={(v: string) => setSugForm({...sugForm, symbol: v.toUpperCase()})} />
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Action</label>
-                  <select value={sugForm.action} onChange={e => setSugForm({...sugForm, action: e.target.value as any})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white">
+                  <select value={sugForm.action} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSugForm({...sugForm, action: e.target.value as any})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white">
                     <option value="BUY">BUY</option><option value="SELL">SELL</option><option value="HOLD">HOLD</option>
                   </select>
                 </div>
@@ -231,7 +231,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Rationale</label>
-                <textarea value={sugForm.reason} onChange={e => setSugForm({...sugForm, reason: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
+                <textarea value={sugForm.reason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSugForm({...sugForm, reason: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
               </div>
               <button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-900/40 flex items-center justify-center gap-2">
                 <Send className="h-4 w-4" /> {sugForm.targetUserEmail ? 'Push Targeted Tip' : 'Publish Tip'}
@@ -242,7 +242,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
           <div className="lg:col-span-2 space-y-4">
             <h3 className="font-bold text-white flex items-center gap-2">Live Suggestions ({suggestions.length})</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {suggestions.map(sug => (
+              {suggestions.map((sug: ManualSuggestion) => (
                 <div key={sug.id} className="bg-slate-900 border border-slate-800 p-4 rounded-3xl">
                   <div className="flex justify-between">
                     <div className="flex items-center gap-2 font-bold text-white text-lg">{sug.symbol} <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">{sug.action}</span></div>
@@ -269,7 +269,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
               <Input label="Ad Title" val={adForm.title} onChange={(v: string) => setAdForm({...adForm, title: v})} />
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Description</label>
-                <textarea value={adForm.description} onChange={e => setAdForm({...adForm, description: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
+                <textarea value={adForm.description} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAdForm({...adForm, description: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Button Label" val={adForm.ctaText} onChange={(v: string) => setAdForm({...adForm, ctaText: v})} />
@@ -280,7 +280,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
           </div>
           <div className="space-y-4">
             <h3 className="font-bold text-white mb-2">Active Ads ({ads.length})</h3>
-            {ads.map(ad => (
+            {ads.map((ad: ManualAd) => (
               <div key={ad.id} className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex justify-between">
                 <div><h4 className="font-bold text-white">{ad.title}</h4><p className="text-xs text-slate-500 mt-1">{ad.description}</p></div>
                 <button onClick={() => { deleteManualAd(ad.id); setAds(getManualAds()); }} className="text-slate-600 hover:text-rose-500"><Trash2 className="h-4 w-4"/></button>
@@ -318,7 +318,7 @@ const RecentActivity: React.FC<{ logs: ActivityLog[] }> = ({ logs }) => (
         <tr><th className="p-4">Time</th><th className="p-4">User</th><th className="p-4">Action</th><th className="p-4">Loc</th></tr>
       </thead>
       <tbody className="divide-y divide-slate-800">
-        {logs.map(log => (
+        {logs.map((log: ActivityLog) => (
           <tr key={log.id} className="hover:bg-white/5">
             <td className="p-4 font-mono">{new Date(log.timestamp).toLocaleTimeString()}</td>
             <td className="p-4 text-white font-medium">{log.email}</td>
@@ -344,7 +344,7 @@ const Input: React.FC<InputProps> = ({ label, val, onChange, type = 'text' }) =>
     <input 
       type={type} 
       value={val} 
-      onChange={e => onChange(e.target.value)} 
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} 
       className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition-all" 
     />
   </div>
