@@ -9,7 +9,7 @@ import {
 } from '../services/adminDataService';
 import { 
   Users, Search, MapPin, Lock, LogOut, 
-  TrendingUp, Activity, Megaphone, Lightbulb, Trash2, Plus, 
+  TrendingUp, Activity, Megaphone, Lightbulb, Trash2,
   Key, ShieldCheck, Target, Send, X, Briefcase
 } from 'lucide-react';
 import { ActivityLog, ManualAd, ManualSuggestion, UserProfile } from '../types';
@@ -34,7 +34,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
   // Form States
   const [adForm, setAdForm] = useState({ title: '', description: '', link: '', ctaText: 'Visit Now' });
-  const [sugForm, setSugForm] = useState({ symbol: '', action: 'BUY' as const, target: 0, stopLoss: 0, reason: '', targetUserEmail: '' });
+  const [sugForm, setSugForm] = useState({ 
+    symbol: '', 
+    action: 'BUY' as 'BUY' | 'SELL' | 'HOLD', 
+    target: 0, 
+    stopLoss: 0, 
+    reason: '', 
+    targetUserEmail: '' 
+  });
 
   useEffect(() => {
     const storedPwd = getAdminPassword();
@@ -217,21 +224,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Symbol" val={sugForm.symbol} onChange={(v: string) => setSugForm({...sugForm, symbol: v.toUpperCase()})} />
+                <Input label="Symbol" val={sugForm.symbol} onChange={(v: string) => setSugForm(prev => ({...prev, symbol: v.toUpperCase()}))} />
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Action</label>
-                  <select value={sugForm.action} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSugForm({...sugForm, action: e.target.value as any})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white">
+                  <select value={sugForm.action} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSugForm(prev => ({...prev, action: e.target.value as any}))} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white">
                     <option value="BUY">BUY</option><option value="SELL">SELL</option><option value="HOLD">HOLD</option>
                   </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Target (₹)" type="number" val={sugForm.target} onChange={(v: string) => setSugForm({...sugForm, target: Number(v)})} />
-                <Input label="Stop Loss (₹)" type="number" val={sugForm.stopLoss} onChange={(v: string) => setSugForm({...sugForm, stopLoss: Number(v)})} />
+                <Input label="Target (₹)" type="number" val={sugForm.target} onChange={(v: string) => setSugForm(prev => ({...prev, target: Number(v)}))} />
+                <Input label="Stop Loss (₹)" type="number" val={sugForm.stopLoss} onChange={(v: string) => setSugForm(prev => ({...prev, stopLoss: Number(v)}))} />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Rationale</label>
-                <textarea value={sugForm.reason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSugForm({...sugForm, reason: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
+                <textarea value={sugForm.reason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSugForm(prev => ({...prev, reason: e.target.value}))} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
               </div>
               <button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-900/40 flex items-center justify-center gap-2">
                 <Send className="h-4 w-4" /> {sugForm.targetUserEmail ? 'Push Targeted Tip' : 'Publish Tip'}
@@ -266,14 +273,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
           <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl">
             <h3 className="font-bold text-white mb-6 flex items-center gap-2"><Megaphone className="h-5 w-5 text-orange-400" /> New Ad Campaign</h3>
             <form onSubmit={handleAddAd} className="space-y-4">
-              <Input label="Ad Title" val={adForm.title} onChange={(v: string) => setAdForm({...adForm, title: v})} />
+              <Input label="Ad Title" val={adForm.title} onChange={(v: string) => setAdForm(prev => ({...prev, title: v}))} />
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Description</label>
-                <textarea value={adForm.description} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAdForm({...adForm, description: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
+                <textarea value={adForm.description} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAdForm(prev => ({...prev, description: e.target.value}))} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Button Label" val={adForm.ctaText} onChange={(v: string) => setAdForm({...adForm, ctaText: v})} />
-                <Input label="Destination URL" type="url" val={adForm.link} onChange={(v: string) => setAdForm({...adForm, link: v})} />
+                <Input label="Button Label" val={adForm.ctaText} onChange={(v: string) => setAdForm(prev => ({...prev, ctaText: v}))} />
+                <Input label="Destination URL" type="url" val={adForm.link} onChange={(v: string) => setAdForm(prev => ({...prev, link: v}))} />
               </div>
               <button className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-orange-900/40">Launch Ad</button>
             </form>
@@ -300,36 +307,44 @@ interface StatCardProps {
   color: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ label, val, icon: Icon, color }) => (
-  <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl backdrop-blur-sm">
-    <div className="flex items-center justify-between mb-2">
-      <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{label}</span>
-      <Icon className={`h-5 w-5 text-${color}-500`} />
+function StatCard({ label, val, icon: Icon, color }: StatCardProps) {
+  return (
+    <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl backdrop-blur-sm">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{label}</span>
+        <Icon className={`h-5 w-5 text-${color}-500`} />
+      </div>
+      <div className="text-3xl font-bold text-white">{val}</div>
     </div>
-    <div className="text-3xl font-bold text-white">{val}</div>
-  </div>
-);
+  );
+}
 
-const RecentActivity: React.FC<{ logs: ActivityLog[] }> = ({ logs }) => (
-  <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden">
-    <div className="p-4 border-b border-slate-800 font-bold text-white flex items-center gap-2"><Activity className="h-4 w-4 text-blue-400" /> Traffic Intelligence</div>
-    <table className="w-full text-left text-xs text-slate-400">
-      <thead className="bg-slate-950/50 text-slate-500 uppercase font-bold text-[9px]">
-        <tr><th className="p-4">Time</th><th className="p-4">User</th><th className="p-4">Action</th><th className="p-4">Loc</th></tr>
-      </thead>
-      <tbody className="divide-y divide-slate-800">
-        {logs.map((log: ActivityLog) => (
-          <tr key={log.id} className="hover:bg-white/5">
-            <td className="p-4 font-mono">{new Date(log.timestamp).toLocaleTimeString()}</td>
-            <td className="p-4 text-white font-medium">{log.email}</td>
-            <td className="p-4"><span className={`px-2 py-0.5 rounded-[4px] font-bold ${log.action === 'LOGIN' ? 'text-emerald-400 bg-emerald-500/10' : 'text-blue-400 bg-blue-500/10'}`}>{log.details}</span></td>
-            <td className="p-4 text-slate-500">{log.location?.city || 'N/A'}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+interface RecentActivityProps {
+  logs: ActivityLog[];
+}
+
+function RecentActivity({ logs }: RecentActivityProps) {
+  return (
+    <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden">
+      <div className="p-4 border-b border-slate-800 font-bold text-white flex items-center gap-2"><Activity className="h-4 w-4 text-blue-400" /> Traffic Intelligence</div>
+      <table className="w-full text-left text-xs text-slate-400">
+        <thead className="bg-slate-950/50 text-slate-500 uppercase font-bold text-[9px]">
+          <tr><th className="p-4">Time</th><th className="p-4">User</th><th className="p-4">Action</th><th className="p-4">Loc</th></tr>
+        </thead>
+        <tbody className="divide-y divide-slate-800">
+          {logs.map((log: ActivityLog) => (
+            <tr key={log.id} className="hover:bg-white/5">
+              <td className="p-4 font-mono">{new Date(log.timestamp).toLocaleTimeString()}</td>
+              <td className="p-4 text-white font-medium">{log.email}</td>
+              <td className="p-4"><span className={`px-2 py-0.5 rounded-[4px] font-bold ${log.action === 'LOGIN' ? 'text-emerald-400 bg-emerald-500/10' : 'text-blue-400 bg-blue-500/10'}`}>{log.details}</span></td>
+              <td className="p-4 text-slate-500">{log.location?.city || 'N/A'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 interface InputProps {
   label: string;
@@ -338,16 +353,18 @@ interface InputProps {
   type?: string;
 }
 
-const Input: React.FC<InputProps> = ({ label, val, onChange, type = 'text' }) => (
-  <div className="space-y-1">
-    <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
-    <input 
-      type={type} 
-      value={val} 
-      onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} 
-      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition-all" 
-    />
-  </div>
-);
+function Input({ label, val, onChange, type = 'text' }: InputProps) {
+  return (
+    <div className="space-y-1">
+      <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
+      <input 
+        type={type} 
+        value={val} 
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} 
+        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition-all" 
+      />
+    </div>
+  );
+}
 
 export default AdminDashboard;
