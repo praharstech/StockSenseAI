@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, StockQuote } from "../types";
 
-// Note: process.env.API_KEY is handled by Vite define in vite.config.ts
-const ai = new GoogleGenAI({ apiKey: (process.env as any).API_KEY });
+// Always use process.env.API_KEY directly for initialization as per guidelines
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * Fetches the current price and provides quick buy/sell suggestions.
@@ -25,8 +25,9 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       }
     `;
 
+    // Using gemini-3-flash-preview as recommended for basic/utility text tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -39,11 +40,26 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
 
     const rawData = JSON.parse(jsonStr);
 
+    // MUST ALWAYS extract the URLs from groundingChunks and list them on the web app when Google Search is used.
+    const sources: GroundingSource[] = [];
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (chunks) {
+      chunks.forEach((chunk: any) => {
+        if (chunk.web?.uri && chunk.web?.title) {
+          sources.push({
+            title: chunk.web.title,
+            uri: chunk.web.uri,
+          });
+        }
+      });
+    }
+
     // Sanitize data to ensure we return numbers, even if model returns null/strings
     return {
       currentPrice: typeof rawData.currentPrice === 'number' ? rawData.currentPrice : 0,
       suggestedBuy: typeof rawData.suggestedBuy === 'number' ? rawData.suggestedBuy : 0,
       suggestedSell: typeof rawData.suggestedSell === 'number' ? rawData.suggestedSell : 0,
+      sources,
     };
   } catch (error) {
     console.error("Quote Fetch Error:", error);
@@ -51,7 +67,8 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
     return {
       currentPrice: 0,
       suggestedBuy: 0,
-      suggestedSell: 0
+      suggestedSell: 0,
+      sources: []
     };
   }
 };
@@ -110,13 +127,21 @@ export const analyzeStockPosition = async (
       2. **Analysis**: A summary of market sentiment relevant to the strategy (${strategy}).
       3. **Price Check**: An estimate of the CURRENT market price in INR (₹).
          IMPORTANT: Include a line exactly like "CURRENT_PRICE: ₹123.45" (using the rupee symbol or just numbers) so I can parse it.
+      
       4. **Break-Even & Outlook**: Calculate the exact price needed to break even. clearly state if they are currently in profit or loss. Provide specific actionable advice (Stop-Loss/Target).
       
+      5. **Final Recommendation**: Based on all factors, give a clear signal.
+         IMPORTANT: Include a line exactly like "FINAL_RECOMMENDATION: <SIGNAL> | <PRICE> | <REASON>"
+         - SIGNAL: Choose one from [STRONG_BUY, STRONG_SELL, NEUTRAL, WAIT]
+         - PRICE: The specific target or entry price in INR.
+         - REASON: A short justification (max 10 words).
+
       Format the rest of the output with clear Markdown headings (e.g., ## Analysis, ## Outlook).
     `;
 
-    const analysisPromise = ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+    // Using gemini-3-flash-preview as recommended for text generation tasks
+    const analysisResponse = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
       contents: analysisPrompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -124,7 +149,6 @@ export const analyzeStockPosition = async (
     });
 
     // 2. Get JSON Chart Data (Simulated Projection)
-    // Note: We are NOT using tools here, so we CAN use responseMimeType: "application/json"
     const chartPrompt = `
       Generate a JSON array of 7 hypothetical price points for stock "${symbol}" starting from a price around ${buyPrice}.
       ${chartContext}
@@ -133,8 +157,8 @@ export const analyzeStockPosition = async (
       Return ONLY JSON.
     `;
 
-    const chartPromise = ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+    const chartResponse = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
       contents: chartPrompt,
       config: {
         responseMimeType: "application/json",
@@ -152,15 +176,10 @@ export const analyzeStockPosition = async (
       },
     });
 
-    const [analysisResponse, chartResponse] = await Promise.all([
-      analysisPromise,
-      chartPromise,
-    ]);
-
     // Process Text Analysis
     let analysisText = analysisResponse.text || "No analysis available.";
     
-    // Extract Sources
+    // Extract Sources (Required for search grounding)
     const sources: GroundingSource[] = [];
     const chunks = analysisResponse.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
@@ -176,8 +195,6 @@ export const analyzeStockPosition = async (
 
     // Extract News
     const news: NewsItem[] = [];
-    // Regex matches "NEWS_ITEM: Headline | Summary | Sentiment"
-    // Case insensitive, handling extra spaces
     const newsRegex = /NEWS_ITEM:\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(Positive|Negative|Neutral)/gi;
     let match;
     while ((match = newsRegex.exec(analysisText)) !== null) {
@@ -188,19 +205,32 @@ export const analyzeStockPosition = async (
       });
     }
 
+    // Extract Recommendation
+    let recommendation: AnalysisResult['recommendation'] = undefined;
+    const recRegex = /FINAL_RECOMMENDATION:\s*(STRONG_BUY|STRONG_SELL|NEUTRAL|WAIT)\s*\|\s*([\d,]+\.?\d*)\s*\|\s*(.+)/i;
+    const recMatch = analysisText.match(recRegex);
+    if (recMatch) {
+      recommendation = {
+        signal: recMatch[1].trim() as any,
+        price: parseFloat(recMatch[2].replace(/,/g, '')),
+        reason: recMatch[3].trim()
+      };
+    }
+
     // Attempt to extract Current Price via Regex
-    // Matches "CURRENT_PRICE: ₹ 1,234.56" or "CURRENT_PRICE: 1234.56"
     const priceMatch = analysisText.match(/CURRENT_PRICE:\s*[^\d]*([\d,]+\.?\d*)/i);
     let currentPriceEstimate = undefined;
     if (priceMatch && priceMatch[1]) {
       currentPriceEstimate = parseFloat(priceMatch[1].replace(/,/g, ''));
     }
 
-    // Clean up the analysis text to remove the raw structured data lines so they don't clutter the UI
+    // Clean up the analysis text
     analysisText = analysisText
-      .replace(newsRegex, '') // Remove news items
-      .replace(/CURRENT_PRICE:.*(\r\n|\r|\n)?/gi, '') // Remove price line
-      .replace(/IMPORTANT:.*(\r\n|\r|\n)?/gi, '') // Remove stray instructions if any
+      .replace(newsRegex, '') 
+      .replace(recRegex, '')
+      .replace(/CURRENT_PRICE:.*(\r\n|\r|\n)?/gi, '') 
+      .replace(/IMPORTANT:.*(\r\n|\r|\n)?/gi, '') 
+      .replace(/FINAL_RECOMMENDATION:.*(\r\n|\r|\n)?/gi, '')
       .trim();
 
     // Process Chart Data
@@ -221,7 +251,7 @@ export const analyzeStockPosition = async (
       console.warn("Failed to parse chart data", e);
     }
 
-    // Determine basic sentiment based on price comparison if available
+    // Determine basic sentiment
     let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
     if (currentPriceEstimate) {
       if (currentPriceEstimate > buyPrice) sentiment = 'bullish';
@@ -235,6 +265,7 @@ export const analyzeStockPosition = async (
       currentPriceEstimate,
       sentiment,
       news,
+      recommendation
     };
 
   } catch (error) {

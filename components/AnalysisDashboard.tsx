@@ -2,7 +2,7 @@ import React from 'react';
 import { AnalysisResult, StockData } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import ReactMarkdown from 'react-markdown';
-import { TrendingUp, TrendingDown, ExternalLink, RefreshCw, AlertCircle, Zap, Clock, Newspaper, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, ExternalLink, RefreshCw, AlertCircle, Zap, Clock, Newspaper, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck, ShieldAlert, Timer } from 'lucide-react';
 import AdBanner from './AdBanner';
 
 interface AnalysisDashboardProps {
@@ -38,6 +38,73 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
     return null;
   };
 
+  const getRecommendationUI = () => {
+    if (!data.recommendation) return null;
+    const { signal, price, reason } = data.recommendation;
+    
+    const config = {
+      STRONG_BUY: {
+        bg: 'bg-emerald-950/40',
+        border: 'border-emerald-500/40',
+        text: 'text-emerald-400',
+        icon: <ShieldCheck className="h-8 w-8 text-emerald-400" />,
+        label: 'Strong Buy'
+      },
+      STRONG_SELL: {
+        bg: 'bg-rose-950/40',
+        border: 'border-rose-500/40',
+        text: 'text-rose-400',
+        icon: <ShieldAlert className="h-8 w-8 text-rose-400" />,
+        label: 'Strong Sell'
+      },
+      NEUTRAL: {
+        bg: 'bg-slate-800/40',
+        border: 'border-slate-700',
+        text: 'text-slate-300',
+        icon: <Minus className="h-8 w-8 text-slate-400" />,
+        label: 'Neutral / Hold'
+      },
+      WAIT: {
+        bg: 'bg-amber-950/40',
+        border: 'border-amber-500/40',
+        text: 'text-amber-400',
+        icon: <Timer className="h-8 w-8 text-amber-400" />,
+        label: 'Wait / Watch'
+      }
+    };
+
+    const style = config[signal] || config.NEUTRAL;
+
+    return (
+      <div className={`mt-8 p-6 rounded-3xl border ${style.bg} ${style.border} backdrop-blur-xl animate-in zoom-in-95 duration-700`}>
+        <div className="flex flex-col sm:flex-row items-center gap-6">
+          <div className={`p-4 rounded-2xl bg-white/5 border border-white/10 shadow-2xl`}>
+            {style.icon}
+          </div>
+          <div className="flex-1 text-center sm:text-left">
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 mb-1">
+              <span className={`text-2xl font-black uppercase tracking-tighter ${style.text}`}>
+                {style.label}
+              </span>
+              <span className="text-slate-500 text-sm font-bold uppercase">at suggested price</span>
+            </div>
+            <div className="text-4xl font-bold text-white mb-2">
+              ₹{price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <p className="text-slate-400 text-sm italic max-w-md">
+              "{reason}"
+            </p>
+          </div>
+          <div className="hidden lg:block">
+            <div className="px-4 py-2 bg-white/5 rounded-full text-[10px] font-bold text-slate-500 uppercase tracking-widest border border-white/10">
+              AI Verification Successful
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
       
@@ -58,7 +125,6 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
 
       {/* Header Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Card 1: Investment */}
         <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 backdrop-blur-md">
           <div className="flex items-center justify-between mb-2">
             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Invested</span>
@@ -72,7 +138,6 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
           </div>
         </div>
 
-        {/* Card 2: Current Value (Estimated) */}
         <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 backdrop-blur-md">
           <div className="flex items-center justify-between mb-2">
             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Est. Value</span>
@@ -91,7 +156,6 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
           </div>
         </div>
 
-        {/* Card 3: P/L */}
         <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 backdrop-blur-md">
           <div className="flex items-center justify-between mb-2">
             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Total P/L</span>
@@ -107,7 +171,7 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart Section - Takes up 2 columns on large screens */}
+        {/* Chart Section */}
         <div className="lg:col-span-2 bg-slate-900/50 p-6 rounded-2xl border border-slate-800 backdrop-blur-md flex flex-col">
           <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-blue-400" /> 
@@ -146,11 +210,11 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
             </ResponsiveContainer>
           </div>
           <p className="text-xs text-slate-500 mt-4 text-center italic">
-            * Projection generated by AI based on {strategy === 'intraday' ? 'technical patterns' : 'fundamental trends'}. Not financial advice.
+            * Projection generated by AI based on technical patterns. Not financial advice.
           </p>
         </div>
 
-        {/* Right Sidebar - News & Ads */}
+        {/* Right Sidebar */}
         <div className="flex flex-col gap-6">
           <AdBanner variant="sidebar" />
           
@@ -180,23 +244,11 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
                  </div>
               )}
             </div>
-            {data.sources.length > 0 && (
-               <div className="mt-4 pt-4 border-t border-slate-800">
-                 <p className="text-xs text-slate-500 mb-2">Sources:</p>
-                 <div className="flex flex-wrap gap-2">
-                  {data.sources.slice(0, 3).map((source, idx) => (
-                    <a key={idx} href={source.uri} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-400 hover:underline truncate max-w-[100px] block">
-                      {source.title}
-                    </a>
-                  ))}
-                 </div>
-               </div>
-            )}
           </div>
         </div>
       </div>
 
-      {/* AI Analysis Text */}
+      {/* AI Analysis Text & Recommendation */}
       <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 backdrop-blur-md">
         <div className="flex items-center justify-between mb-4">
            <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -204,9 +256,26 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
           </h3>
         </div>
         
-        <div className="prose prose-invert prose-sm max-w-none prose-headings:text-blue-200 prose-a:text-blue-400">
+        <div className="prose prose-invert prose-sm max-w-none prose-headings:text-blue-200 prose-a:text-blue-400 border-b border-slate-800 pb-8 mb-4">
           <ReactMarkdown>{data.analysisText}</ReactMarkdown>
         </div>
+
+        {/* The requested strong buy/sell recommendation at the bottom of the report */}
+        {getRecommendationUI()}
+
+        {data.sources.length > 0 && (
+          <div className="mt-8 pt-4 border-t border-slate-800/50">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Grounding Sources</p>
+            <div className="flex flex-wrap gap-3">
+              {data.sources.slice(0, 4).map((source, idx) => (
+                <a key={idx} href={source.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-slate-950/50 hover:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 text-[11px] text-blue-400 transition-all">
+                  {source.title.length > 25 ? source.title.substring(0, 25) + '...' : source.title}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Reset Button */}

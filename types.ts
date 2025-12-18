@@ -6,7 +6,7 @@ export interface StockData {
 }
 
 export interface ChartDataPoint {
-  label: string; // Changed from 'day' to 'label' to support hours or days
+  label: string;
   price: number;
   type: 'historical' | 'forecast';
 }
@@ -26,15 +26,22 @@ export interface StockQuote {
   currentPrice: number;
   suggestedBuy: number;
   suggestedSell: number;
+  // Added sources for search grounding compliance
+  sources?: GroundingSource[];
 }
 
 export interface AnalysisResult {
   analysisText: string;
   sources: GroundingSource[];
   chartData: ChartDataPoint[];
-  currentPriceEstimate?: number; // Extracted from text if possible
+  currentPriceEstimate?: number;
   sentiment: 'bullish' | 'bearish' | 'neutral';
   news: NewsItem[];
+  recommendation?: {
+    signal: 'STRONG_BUY' | 'STRONG_SELL' | 'NEUTRAL' | 'WAIT';
+    price: number;
+    reason: string;
+  };
 }
 
 export interface AnalysisState {
@@ -46,7 +53,16 @@ export interface AnalysisState {
 export interface UserLocation {
   lat: number;
   lng: number;
-  city?: string; // Optional simulated city name
+  city?: string;
+}
+
+export interface UserProfile {
+  name: string;
+  email: string;
+  mobile: string;
+  city: string;
+  profession: string;
+  joinedAt: number;
 }
 
 export interface ActivityLog {
@@ -54,6 +70,25 @@ export interface ActivityLog {
   timestamp: number;
   email: string;
   action: 'LOGIN' | 'SEARCH_STOCK';
-  details: string; // e.g., "Searched RELIANCE" or "Logged in"
+  details: string;
   location: UserLocation | null;
+}
+
+export interface ManualAd {
+  id: string;
+  title: string;
+  description: string;
+  ctaText: string;
+  link: string;
+}
+
+export interface ManualSuggestion {
+  id: string;
+  symbol: string;
+  action: 'BUY' | 'SELL' | 'HOLD';
+  target: number;
+  stopLoss: number;
+  reason: string;
+  timestamp: number;
+  targetUserEmail?: string; // Optional: target a specific user
 }

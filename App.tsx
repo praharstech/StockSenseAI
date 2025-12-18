@@ -60,7 +60,6 @@ const App: React.FC = () => {
     setAnalysis({ loading: false, error: null, result: null });
   };
 
-  // Render Admin View
   if (viewMode === 'ADMIN_DASHBOARD') {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
@@ -71,7 +70,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30">
-      {/* Dynamic Background Mesh */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-900/10 blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-emerald-900/10 blur-[120px]"></div>
@@ -96,7 +94,7 @@ const App: React.FC = () => {
             />
           </main>
           <footer className="py-8 text-center text-slate-600 text-xs">
-            <p>© {new Date().getFullYear()} StockSense AI. Secure Login Required.</p>
+            <p>© {new Date().getFullYear()} StockSense AI. Secure Biometric & OTP Login.</p>
           </footer>
         </div>
       ) : (
@@ -139,13 +137,13 @@ const App: React.FC = () => {
               <div className="w-full flex flex-col items-center animate-in fade-in zoom-in duration-500">
                 <div className="mb-10 text-center space-y-2">
                   <h2 className="text-4xl font-extrabold text-white sm:text-5xl tracking-tight">
-                    Smart Portfolio <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">Intelligence</span>
+                    Smart Wealth <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">Intelligence</span>
                   </h2>
                   <p className="text-slate-400 text-lg max-w-xl mx-auto">
-                    Instant AI-powered break-even analysis and price forecasting for your stock positions.
+                    AI-powered position analysis and personalized market forecasting.
                   </p>
                 </div>
-                <StockInput onSubmit={handleStockSubmit} isLoading={false} />
+                <StockInput onSubmit={handleStockSubmit} isLoading={false} userEmail={userEmail} />
               </div>
             ) : null}
 
@@ -157,7 +155,7 @@ const App: React.FC = () => {
                       <LineChart className="h-8 w-8 text-blue-400 animate-pulse" />
                     </div>
                  </div>
-                 <p className="text-slate-400 animate-pulse text-lg">Gathering market intelligence...</p>
+                 <p className="text-slate-400 animate-pulse text-lg">Scanning Global Markets...</p>
               </div>
             )}
 
@@ -183,7 +181,7 @@ const App: React.FC = () => {
           </main>
 
           <footer className="relative z-10 py-8 text-center text-slate-600 text-xs">
-            <p>© {new Date().getFullYear()} StockSense AI. Powered by Google Gemini.</p>
+            <p>© {new Date().getFullYear()} StockSense AI. Powered by Google Gemini Intelligence.</p>
           </footer>
         </>
       )}
