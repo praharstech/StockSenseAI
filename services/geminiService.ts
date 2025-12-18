@@ -1,42 +1,47 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, StockQuote } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * Helper to extract JSON from a string that might contain other text or markdown blocks.
- * Handles both object {} and array [] formats.
+ * Robustly extracts JSON from a string that might contain markdown or conversational text.
  */
 const extractJson = (text: string) => {
+  if (!text) return null;
+  
+  // 1. Strip markdown code blocks if present
+  let cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
+  
+  // 2. Try direct parse
   try {
-    // Look for the first occurrence of either [ or {
-    const objectStart = text.indexOf('{');
-    const arrayStart = text.indexOf('[');
+    return JSON.parse(cleaned);
+  } catch (e) {
+    // 3. Fallback: find the actual JSON boundaries
+    const firstBrace = cleaned.indexOf('{');
+    const firstBracket = cleaned.indexOf('[');
     
     let start = -1;
-    let end = -1;
     let endChar = '';
-
-    if (objectStart !== -1 && (arrayStart === -1 || (objectStart < arrayStart && objectStart !== -1))) {
-      start = objectStart;
+    
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+      start = firstBrace;
       endChar = '}';
-    } else if (arrayStart !== -1) {
-      start = arrayStart;
+    } else if (firstBracket !== -1) {
+      start = firstBracket;
       endChar = ']';
     }
-
+    
     if (start !== -1) {
-      end = text.lastIndexOf(endChar);
+      const end = cleaned.lastIndexOf(endChar);
       if (end > start) {
-        const jsonStr = text.substring(start, end + 1);
-        return JSON.parse(jsonStr);
+        try {
+          return JSON.parse(cleaned.substring(start, end + 1));
+        } catch (innerError) {
+          console.warn("JSON boundary extraction failed:", innerError);
+        }
       }
     }
-    
-    return JSON.parse(text);
-  } catch (e) {
-    console.warn("JSON Extraction Parsing Error:", e, "Raw Text:", text);
+    console.error("Failed to extract JSON from text:", text);
     return null;
   }
 };
@@ -48,12 +53,9 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
   try {
     const prompt = `
       Find the current real-time market price for stock "${symbol}" in Indian Rupee (INR) using Google Search.
-      Based on the very latest price action (intraday), suggest a:
-      1. "currentPrice": The current market price.
-      2. "suggestedBuy": A good entry price (immediate support level).
-      3. "suggestedSell": A good target price (immediate resistance level).
+      Suggest entry and target prices based on today's volatility.
       
-      Return ONLY a raw JSON object with the following structure:
+      Return ONLY a raw JSON object with:
       {
         "currentPrice": number,
         "suggestedBuy": number,
@@ -66,6 +68,7 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
+        systemInstruction: "You are a precise financial data extractor. Your output must be strictly valid JSON and nothing else.",
       },
     });
 
@@ -110,42 +113,19 @@ export const analyzeStockPosition = async (
   const { symbol, buyPrice, quantity, strategy } = input;
   
   try {
-    let strategyInstructions = "";
-    let chartContext = "";
-
-    if (strategy === 'intraday') {
-      strategyInstructions = `
-        **Trading Strategy: Intraday Trading**
-        - Focus on liquidity, high volatility, and volume.
-        - Manage risk: Provide STRICT stop-loss and profit targets.
-        - Use Indian Rupee (₹) for all currency values.
-      `;
-      chartContext = `
-        Generate a JSON array of 7 hypothetical HOURLY price points for the next trading session.
-      `;
-    } else {
-      strategyInstructions = `
-        **Trading Strategy: Long-Term Investment**
-        - Analyze fundamentals: Earnings growth, sector trends.
-        - Use Indian Rupee (₹) for all currency values.
-      `;
-      chartContext = `
-        Generate a JSON array of 7 hypothetical DAILY closing prices starting from today.
-      `;
-    }
+    const strategyInstructions = strategy === 'intraday' 
+      ? "Focus on hourly volatility and immediate risk."
+      : "Focus on fundamental trends and 7-day outlook.";
 
     const analysisPrompt = `
-      Analyze the stock "${symbol}" for a user who bought ${quantity} shares at ₹${buyPrice}.
+      Analyze "${symbol}" (${quantity} shares @ ₹${buyPrice}). 
+      Strategy: ${strategy}. ${strategyInstructions}
       
-      ${strategyInstructions}
-      
-      Please provide the following:
-      1. **Market News**: Headlines affecting the stock. 
-         Format: NEWS_ITEM: <Headline> | <Summary> | <Sentiment>
-      2. **Analysis**: Summary of market sentiment.
-      3. **Price Check**: line exactly like "CURRENT_PRICE: ₹123.45"
-      4. **Break-Even & Outlook**: State if profit or loss. Actionable advice.
-      5. **Final Recommendation**: Clear signal line like "FINAL_RECOMMENDATION: <SIGNAL> | <PRICE> | <REASON>"
+      Output components:
+      1. NEWS_ITEM: <Headline> | <Summary> | <Sentiment> (Extract at least 3)
+      2. Analysis of the current position.
+      3. CURRENT_PRICE: ₹<Value>
+      4. FINAL_RECOMMENDATION: <SIGNAL> | <PRICE> | <REASON>
     `;
 
     const analysisResponse = await ai.models.generateContent({
@@ -153,13 +133,13 @@ export const analyzeStockPosition = async (
       contents: analysisPrompt,
       config: {
         tools: [{ googleSearch: {} }],
+        systemInstruction: "You are a professional stock market analyst providing data-driven insights.",
       },
     });
 
     const chartPrompt = `
-      Generate a JSON array of 7 hypothetical price points for stock "${symbol}" starting from around ${buyPrice}.
-      ${chartContext}
-      Return ONLY JSON.
+      Generate 7 projected price points for "${symbol}" for the next ${strategy === 'intraday' ? 'session' : 'week'}.
+      Start price should be around ${buyPrice}. Output JSON array of {label: string, price: number}.
     `;
 
     const chartResponse = await ai.models.generateContent({
@@ -231,17 +211,13 @@ export const analyzeStockPosition = async (
       .trim();
 
     let chartData: ChartDataPoint[] = [];
-    try {
-      const rawChartData = extractJson(chartResponse.text || "[]");
-      if (Array.isArray(rawChartData)) {
-        chartData = rawChartData.map((item: any) => ({
-          label: item.label,
-          price: item.price,
-          type: 'forecast',
-        }));
-      }
-    } catch (e) {
-      console.warn("Failed to parse chart data", e);
+    const rawChartData = extractJson(chartResponse.text || "[]");
+    if (Array.isArray(rawChartData)) {
+      chartData = rawChartData.map((item: any) => ({
+        label: item.label,
+        price: item.price,
+        type: 'forecast',
+      }));
     }
 
     let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
