@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { getDashboardStats, getLogs } from '../services/trackingService';
 import { 
@@ -8,9 +7,9 @@ import {
   getUserProfiles
 } from '../services/adminDataService';
 import { 
-  Users, Search, MapPin, Lock, LogOut, LayoutDashboard, 
+  Users, Search, MapPin, Lock, LogOut, 
   TrendingUp, Activity, Megaphone, Lightbulb, Trash2, Plus, 
-  Key, ShieldCheck, AlertCircle, Mail, Phone, Briefcase, 
+  Key, ShieldCheck, Mail, Phone, Briefcase, 
   Target, Send, X
 } from 'lucide-react';
 import { ActivityLog, ManualAd, ManualSuggestion, UserProfile } from '../types';
@@ -128,20 +127,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         </div>
         
         <div className="flex flex-wrap bg-slate-900 p-1 rounded-2xl border border-slate-800">
-          {[
-            { id: 'ACTIVITY', icon: Activity, label: 'Stats' },
-            { id: 'USERS', icon: Users, label: 'Users' },
-            { id: 'ADS', icon: Megaphone, label: 'Ads' },
-            { id: 'SUGGESTIONS', icon: Lightbulb, label: 'Pro Tips' }
-          ].map(t => (
-            <button 
-              key={t.id}
-              onClick={() => setActiveTab(t.id as Tab)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${activeTab === t.id ? 'bg-slate-800 text-white font-bold' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-              <t.icon className="h-4 w-4" /> {t.label}
-            </button>
-          ))}
+          {(['ACTIVITY', 'USERS', 'ADS', 'SUGGESTIONS'] as const).map(tabId => {
+            const icons = { ACTIVITY: Activity, USERS: Users, ADS: Megaphone, SUGGESTIONS: Lightbulb };
+            const labels = { ACTIVITY: 'Stats', USERS: 'Users', ADS: 'Ads', SUGGESTIONS: 'Pro Tips' };
+            const IconComp = icons[tabId];
+            return (
+              <button 
+                key={tabId}
+                onClick={() => setActiveTab(tabId)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${activeTab === tabId ? 'bg-slate-800 text-white font-bold' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                <IconComp className="h-4 w-4" /> {labels[tabId]}
+              </button>
+            );
+          })}
         </div>
 
         <button onClick={onLogout} className="flex items-center gap-2 text-slate-500 hover:text-rose-400 px-4 py-2"><LogOut className="h-4 w-4" /> Exit</button>
@@ -218,7 +217,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Symbol" val={sugForm.symbol} onChange={v => setSugForm({...sugForm, symbol: v.toUpperCase()})} />
+                <Input label="Symbol" val={sugForm.symbol} onChange={(v: string) => setSugForm({...sugForm, symbol: v.toUpperCase()})} />
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Action</label>
                   <select value={sugForm.action} onChange={e => setSugForm({...sugForm, action: e.target.value as any})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white">
@@ -227,8 +226,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Target (₹)" type="number" val={sugForm.target} onChange={v => setSugForm({...sugForm, target: Number(v)})} />
-                <Input label="Stop Loss (₹)" type="number" val={sugForm.stopLoss} onChange={v => setSugForm({...sugForm, stopLoss: Number(v)})} />
+                <Input label="Target (₹)" type="number" val={sugForm.target} onChange={(v: string) => setSugForm({...sugForm, target: Number(v)})} />
+                <Input label="Stop Loss (₹)" type="number" val={sugForm.stopLoss} onChange={(v: string) => setSugForm({...sugForm, stopLoss: Number(v)})} />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Rationale</label>
@@ -267,14 +266,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
           <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl">
             <h3 className="font-bold text-white mb-6 flex items-center gap-2"><Megaphone className="h-5 w-5 text-orange-400" /> New Ad Campaign</h3>
             <form onSubmit={handleAddAd} className="space-y-4">
-              <Input label="Ad Title" val={adForm.title} onChange={v => setAdForm({...adForm, title: v})} />
+              <Input label="Ad Title" val={adForm.title} onChange={(v: string) => setAdForm({...adForm, title: v})} />
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Description</label>
                 <textarea value={adForm.description} onChange={e => setAdForm({...adForm, description: e.target.value})} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Button Label" val={adForm.ctaText} onChange={v => setAdForm({...adForm, ctaText: v})} />
-                <Input label="Destination URL" type="url" val={adForm.link} onChange={v => setAdForm({...adForm, link: v})} />
+                <Input label="Button Label" val={adForm.ctaText} onChange={(v: string) => setAdForm({...adForm, ctaText: v})} />
+                <Input label="Destination URL" type="url" val={adForm.link} onChange={(v: string) => setAdForm({...adForm, link: v})} />
               </div>
               <button className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-orange-900/40">Launch Ad</button>
             </form>
@@ -294,7 +293,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   );
 };
 
-const StatCard = ({ label, val, icon: Icon, color }: any) => (
+interface StatCardProps {
+  label: string;
+  val: string | number;
+  icon: React.ElementType;
+  color: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ label, val, icon: Icon, color }) => (
   <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl backdrop-blur-sm">
     <div className="flex items-center justify-between mb-2">
       <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">{label}</span>
@@ -304,7 +310,7 @@ const StatCard = ({ label, val, icon: Icon, color }: any) => (
   </div>
 );
 
-const RecentActivity = ({ logs }: { logs: ActivityLog[] }) => (
+const RecentActivity: React.FC<{ logs: ActivityLog[] }> = ({ logs }) => (
   <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden">
     <div className="p-4 border-b border-slate-800 font-bold text-white flex items-center gap-2"><Activity className="h-4 w-4 text-blue-400" /> Traffic Intelligence</div>
     <table className="w-full text-left text-xs text-slate-400">
@@ -325,10 +331,22 @@ const RecentActivity = ({ logs }: { logs: ActivityLog[] }) => (
   </div>
 );
 
-const Input = ({ label, val, onChange, type = 'text' }: any) => (
+interface InputProps {
+  label: string;
+  val: string | number;
+  onChange: (val: string) => void;
+  type?: string;
+}
+
+const Input: React.FC<InputProps> = ({ label, val, onChange, type = 'text' }) => (
   <div className="space-y-1">
     <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
-    <input type={type} value={val} onChange={e => onChange(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition-all" />
+    <input 
+      type={type} 
+      value={val} 
+      onChange={e => onChange(e.target.value)} 
+      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition-all" 
+    />
   </div>
 );
 
