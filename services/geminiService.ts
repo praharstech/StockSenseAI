@@ -1,7 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, StockQuote } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Note: process.env.API_KEY is handled by Vite define in vite.config.ts
+const ai = new GoogleGenAI({ apiKey: (process.env as any).API_KEY });
 
 /**
  * Fetches the current price and provides quick buy/sell suggestions.
@@ -205,13 +206,16 @@ export const analyzeStockPosition = async (
     // Process Chart Data
     let chartData: ChartDataPoint[] = [];
     try {
-      const rawChartData = JSON.parse(chartResponse.text);
-      if (Array.isArray(rawChartData)) {
-        chartData = rawChartData.map((item: any) => ({
-          label: item.label,
-          price: item.price,
-          type: 'forecast',
-        }));
+      const chartJson = chartResponse.text;
+      if (chartJson) {
+        const rawChartData = JSON.parse(chartJson);
+        if (Array.isArray(rawChartData)) {
+          chartData = rawChartData.map((item: any) => ({
+            label: item.label,
+            price: item.price,
+            type: 'forecast',
+          }));
+        }
       }
     } catch (e) {
       console.warn("Failed to parse chart data", e);
