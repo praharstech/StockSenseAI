@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, StockQuote } from "../types";
 
@@ -17,7 +18,7 @@ const extractJson = (text: string) => {
     let end = -1;
     let endChar = '';
 
-    if (objectStart !== -1 && (arrayStart === -1 || objectStart < arrayStart)) {
+    if (objectStart !== -1 && (arrayStart === -1 || (objectStart < arrayStart && objectStart !== -1))) {
       start = objectStart;
       endChar = '}';
     } else if (arrayStart !== -1) {

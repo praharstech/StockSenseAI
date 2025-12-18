@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { AnalysisResult, StockData } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -161,8 +162,8 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
             <TrendingUp className="h-5 w-5 text-blue-400" /> 
             AI Projected Movement
           </h3>
-          <div className="w-full min-h-[300px]">
-            <ResponsiveContainer width="100%" height="100%" minHeight={300} aspect={2}>
+          <div className="w-full min-h-[350px]">
+            <ResponsiveContainer width="100%" height="100%" minHeight={350} aspect={1.8}>
               <LineChart data={data.chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                 <XAxis 
