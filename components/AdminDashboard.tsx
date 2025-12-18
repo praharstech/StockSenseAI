@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { getDashboardStats, getLogs } from '../services/trackingService';
 import { 
@@ -20,23 +19,37 @@ interface AdminDashboardProps {
 
 type Tab = 'ACTIVITY' | 'ADS' | 'SUGGESTIONS' | 'USERS';
 
+interface AdForm {
+  title: string;
+  description: string;
+  link: string;
+  ctaText: string;
+}
+
+interface SugForm {
+  symbol: string;
+  action: 'BUY' | 'SELL' | 'HOLD';
+  target: number;
+  stopLoss: number;
+  reason: string;
+  targetUserEmail: string;
+}
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('ACTIVITY');
   const [password, setPassword] = useState('');
   const [isSettingUp, setIsSettingUp] = useState(false);
   
-  // Stats & Management Data
   const [stats, setStats] = useState<ReturnType<typeof getDashboardStats> | null>(null);
   const [ads, setAds] = useState<ManualAd[]>([]);
   const [suggestions, setSuggestions] = useState<ManualSuggestion[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
 
-  // Form States
-  const [adForm, setAdForm] = useState({ title: '', description: '', link: '', ctaText: 'Visit Now' });
-  const [sugForm, setSugForm] = useState({ 
+  const [adForm, setAdForm] = useState<AdForm>({ title: '', description: '', link: '', ctaText: 'Visit Now' });
+  const [sugForm, setSugForm] = useState<SugForm>({ 
     symbol: '', 
-    action: 'BUY' as 'BUY' | 'SELL' | 'HOLD', 
+    action: 'BUY', 
     target: 0, 
     stopLoss: 0, 
     reason: '', 
@@ -126,7 +139,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
   return (
     <div className="w-full max-w-6xl mx-auto p-4 md:p-8 animate-in fade-in">
-      {/* Header Tabs */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-800">
         <div className="flex items-center gap-3">
           <div className="bg-blue-600 p-2.5 rounded-xl"><ShieldCheck className="h-6 w-6 text-white" /></div>
@@ -135,16 +147,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         
         <div className="flex flex-wrap bg-slate-900 p-1 rounded-2xl border border-slate-800">
           {(['ACTIVITY', 'USERS', 'ADS', 'SUGGESTIONS'] as const).map((tabId: Tab) => {
-            const icons: Record<Tab, React.ElementType> = { ACTIVITY: Activity, USERS: Users, ADS: Megaphone, SUGGESTIONS: Lightbulb };
-            const labels: Record<Tab, string> = { ACTIVITY: 'Stats', USERS: 'Users', ADS: 'Ads', SUGGESTIONS: 'Pro Tips' };
-            const IconComp = icons[tabId];
+            const IconComp = { ACTIVITY: Activity, USERS: Users, ADS: Megaphone, SUGGESTIONS: Lightbulb }[tabId];
+            const label = { ACTIVITY: 'Stats', USERS: 'Users', ADS: 'Ads', SUGGESTIONS: 'Pro Tips' }[tabId];
             return (
               <button 
                 key={tabId}
                 onClick={() => setActiveTab(tabId)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${activeTab === tabId ? 'bg-slate-800 text-white font-bold' : 'text-slate-500 hover:text-slate-300'}`}
               >
-                <IconComp className="h-4 w-4" /> {labels[tabId]}
+                <IconComp className="h-4 w-4" /> {label}
               </button>
             );
           })}
@@ -158,109 +169,113 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <StatCard label="Active (24h)" val={stats?.activeUsers || 0} icon={Users} color="blue" />
             <StatCard label="Total Queries" val={stats?.totalSearches || 0} icon={Search} color="emerald" />
-            <StatCard label="Trending Symbol" val={stats?.topStocks[0]?.name || "N/A"} icon={TrendingUp} color="purple" />
+            <StatCard label="Trending Symbol" val={stats?.topStocks?.[0]?.name || "N/A"} icon={TrendingUp} color="purple" />
           </div>
           <RecentActivity logs={stats?.recentActivity || []} />
         </div>
       )}
 
       {activeTab === 'USERS' && (
-        <div className="space-y-6">
-          <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden">
-            <table className="w-full text-left text-sm text-slate-400">
-              <thead className="bg-slate-950/50 text-slate-500 uppercase font-bold text-[10px]">
-                <tr>
-                  <th className="p-4">User Details</th>
-                  <th className="p-4">Location/Prof</th>
-                  <th className="p-4">Interests (Searched)</th>
-                  <th className="p-4">Action</th>
+        <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden">
+          <table className="w-full text-left text-sm text-slate-400">
+            <thead className="bg-slate-950/50 text-slate-500 uppercase font-bold text-[10px]">
+              <tr>
+                <th className="p-4">User Details</th>
+                <th className="p-4">Location/Prof</th>
+                <th className="p-4">Interests</th>
+                <th className="p-4">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {users.map((user: UserProfile) => (
+                <tr key={user.email} className="hover:bg-white/5 transition-colors">
+                  <td className="p-4">
+                    <div className="text-white font-bold">{user.name}</div>
+                    <div className="text-xs text-slate-500">{user.email}</div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-1.5 text-xs"><MapPin className="h-3 w-3" /> {user.city}</div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1"><Briefcase className="h-3 w-3" /> {user.profession}</div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex flex-wrap gap-1">
+                      {getUserSearchInterests(user.email).map((s: string) => (
+                        <span key={s} className="bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded text-[10px] font-bold">{s}</span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <button 
+                      onClick={() => { setActiveTab('SUGGESTIONS'); setSugForm((prev: SugForm) => ({...prev, targetUserEmail: user.email})); }}
+                      className="p-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-xl transition-all"
+                    >
+                      <Target className="h-4 w-4" />
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {users.map((user: UserProfile) => (
-                  <tr key={user.email} className="hover:bg-white/5 transition-colors">
-                    <td className="p-4">
-                      <div className="text-white font-bold">{user.name}</div>
-                      <div className="text-xs text-slate-500">{user.email}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3" /> {user.city}</div>
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500"><Briefcase className="h-3 w-3" /> {user.profession}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex flex-wrap gap-1">
-                        {getUserSearchInterests(user.email).map((s: string) => (
-                          <span key={s} className="bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded text-[10px] font-bold">{s}</span>
-                        ))}
-                        {getUserSearchInterests(user.email).length === 0 && <span className="text-slate-700 text-[10px]">No searches yet</span>}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <button 
-                        onClick={() => { setActiveTab('SUGGESTIONS'); setSugForm({...sugForm, targetUserEmail: user.email}); }}
-                        className="p-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-xl transition-all"
-                        title="Send Targeted Tip"
-                      >
-                        <Target className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
       {activeTab === 'SUGGESTIONS' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1 bg-slate-900/50 border border-slate-800 p-6 rounded-3xl h-fit">
-            <h3 className="font-bold text-white mb-6 flex items-center gap-2"><Lightbulb className="h-5 w-5 text-emerald-400" /> {sugForm.targetUserEmail ? 'Targeted Pro Tip' : 'Public Pro Tip'}</h3>
+            <h3 className="font-bold text-white mb-6 flex items-center gap-2"><Lightbulb className="h-5 w-5 text-emerald-400" /> New Pro Tip</h3>
             <form onSubmit={handleAddSuggestion} className="space-y-4">
               {sugForm.targetUserEmail && (
                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl mb-4 flex items-center justify-between">
-                  <div className="text-[10px] text-emerald-400 font-bold uppercase">Targeting: {sugForm.targetUserEmail}</div>
-                  <button type="button" onClick={() => setSugForm({...sugForm, targetUserEmail: ''})} className="text-emerald-400"><X className="h-3 w-3"/></button>
+                  <div className="text-[10px] text-emerald-400 font-bold uppercase">To: {sugForm.targetUserEmail}</div>
+                  <button type="button" onClick={() => setSugForm((prev: SugForm) => ({...prev, targetUserEmail: ''}))} className="text-emerald-400"><X className="h-3 w-3"/></button>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Symbol" val={sugForm.symbol} onChange={(v: string) => setSugForm(prev => ({...prev, symbol: v.toUpperCase()}))} />
+                <Input label="Symbol" val={sugForm.symbol} onChange={(v: string) => setSugForm((prev: SugForm) => ({...prev, symbol: v.toUpperCase()}))} />
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-500 uppercase">Action</label>
-                  <select value={sugForm.action} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSugForm(prev => ({...prev, action: e.target.value as any}))} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white">
+                  <select 
+                    value={sugForm.action} 
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSugForm((prev: SugForm) => ({...prev, action: e.target.value as any}))} 
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-xs"
+                  >
                     <option value="BUY">BUY</option><option value="SELL">SELL</option><option value="HOLD">HOLD</option>
                   </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Target (₹)" type="number" val={sugForm.target} onChange={(v: string) => setSugForm(prev => ({...prev, target: Number(v)}))} />
-                <Input label="Stop Loss (₹)" type="number" val={sugForm.stopLoss} onChange={(v: string) => setSugForm(prev => ({...prev, stopLoss: Number(v)}))} />
+                <Input label="Target" type="number" val={sugForm.target} onChange={(v: string) => setSugForm((prev: SugForm) => ({...prev, target: parseFloat(v) || 0}))} />
+                <Input label="SL" type="number" val={sugForm.stopLoss} onChange={(v: string) => setSugForm((prev: SugForm) => ({...prev, stopLoss: parseFloat(v) || 0}))} />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Rationale</label>
-                <textarea value={sugForm.reason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSugForm(prev => ({...prev, reason: e.target.value}))} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
+                <textarea 
+                  value={sugForm.reason} 
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSugForm((prev: SugForm) => ({...prev, reason: e.target.value}))} 
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24 text-xs outline-none focus:border-emerald-500" 
+                />
               </div>
-              <button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-900/40 flex items-center justify-center gap-2">
-                <Send className="h-4 w-4" /> {sugForm.targetUserEmail ? 'Push Targeted Tip' : 'Publish Tip'}
+              <button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2">
+                <Send className="h-4 w-4" /> Push Tip
               </button>
             </form>
           </div>
 
           <div className="lg:col-span-2 space-y-4">
-            <h3 className="font-bold text-white flex items-center gap-2">Live Suggestions ({suggestions.length})</h3>
+            <h3 className="font-bold text-white flex items-center gap-2">Live Suggestions</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {suggestions.map((sug: ManualSuggestion) => (
                 <div key={sug.id} className="bg-slate-900 border border-slate-800 p-4 rounded-3xl">
                   <div className="flex justify-between">
                     <div className="flex items-center gap-2 font-bold text-white text-lg">{sug.symbol} <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">{sug.action}</span></div>
-                    <button onClick={() => { deleteManualSuggestion(sug.id); setSuggestions(getManualSuggestions()); }} className="text-slate-600 hover:text-rose-500"><Trash2 className="h-4 w-4"/></button>
+                    <button onClick={() => { deleteManualSuggestion(sug.id); setSuggestions(getManualSuggestions()); }} className="text-slate-600 hover:text-rose-500 transition-colors"><Trash2 className="h-4 w-4"/></button>
                   </div>
-                  {sug.targetUserEmail && <div className="text-[9px] text-blue-400 font-bold uppercase mt-1">Exclusive to: {sug.targetUserEmail}</div>}
-                  <div className="mt-3 flex gap-4 text-xs font-mono">
+                  {sug.targetUserEmail && <div className="text-[9px] text-blue-400 font-bold uppercase mt-1">Direct to: {sug.targetUserEmail}</div>}
+                  <div className="mt-3 flex gap-4 text-[10px] font-mono">
                     <div className="text-slate-500">TGT: <span className="text-white">₹{sug.target}</span></div>
                     <div className="text-slate-500">SL: <span className="text-white">₹{sug.stopLoss}</span></div>
                   </div>
-                  <p className="text-xs text-slate-400 mt-2 line-clamp-2 italic">"{sug.reason}"</p>
+                  <p className="text-[11px] text-slate-400 mt-2 line-clamp-2 italic">"{sug.reason}"</p>
                 </div>
               ))}
             </div>
@@ -271,26 +286,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
       {activeTab === 'ADS' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl">
-            <h3 className="font-bold text-white mb-6 flex items-center gap-2"><Megaphone className="h-5 w-5 text-orange-400" /> New Ad Campaign</h3>
+            <h3 className="font-bold text-white mb-6 flex items-center gap-2"><Megaphone className="h-5 w-5 text-orange-400" /> Launch Ad</h3>
             <form onSubmit={handleAddAd} className="space-y-4">
-              <Input label="Ad Title" val={adForm.title} onChange={(v: string) => setAdForm(prev => ({...prev, title: v}))} />
+              <Input label="Title" val={adForm.title} onChange={(v: string) => setAdForm((prev: AdForm) => ({...prev, title: v}))} />
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Description</label>
-                <textarea value={adForm.description} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAdForm(prev => ({...prev, description: e.target.value}))} className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24" />
+                <textarea 
+                  value={adForm.description} 
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAdForm((prev: AdForm) => ({...prev, description: e.target.value}))} 
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white h-24 text-xs outline-none focus:border-orange-500" 
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Button Label" val={adForm.ctaText} onChange={(v: string) => setAdForm(prev => ({...prev, ctaText: v}))} />
-                <Input label="Destination URL" type="url" val={adForm.link} onChange={(v: string) => setAdForm(prev => ({...prev, link: v}))} />
+                <Input label="Button" val={adForm.ctaText} onChange={(v: string) => setAdForm((prev: AdForm) => ({...prev, ctaText: v}))} />
+                <Input label="URL" val={adForm.link} onChange={(v: string) => setAdForm((prev: AdForm) => ({...prev, link: v}))} />
               </div>
-              <button className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-orange-900/40">Launch Ad</button>
+              <button className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl shadow-lg">Create Campaign</button>
             </form>
           </div>
           <div className="space-y-4">
-            <h3 className="font-bold text-white mb-2">Active Ads ({ads.length})</h3>
+            <h3 className="font-bold text-white mb-2">Active Campaigns</h3>
             {ads.map((ad: ManualAd) => (
               <div key={ad.id} className="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex justify-between">
-                <div><h4 className="font-bold text-white">{ad.title}</h4><p className="text-xs text-slate-500 mt-1">{ad.description}</p></div>
-                <button onClick={() => { deleteManualAd(ad.id); setAds(getManualAds()); }} className="text-slate-600 hover:text-rose-500"><Trash2 className="h-4 w-4"/></button>
+                <div><h4 className="font-bold text-white text-sm">{ad.title}</h4><p className="text-[10px] text-slate-500 mt-1">{ad.description}</p></div>
+                <button onClick={() => { deleteManualAd(ad.id); setAds(getManualAds()); }} className="text-slate-600 hover:text-rose-500 transition-colors"><Trash2 className="h-4 w-4"/></button>
               </div>
             ))}
           </div>
@@ -300,14 +319,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   );
 };
 
-interface StatCardProps {
-  label: string;
-  val: string | number;
-  icon: React.ElementType;
-  color: string;
-}
-
-function StatCard({ label, val, icon: Icon, color }: StatCardProps) {
+function StatCard({ label, val, icon: Icon, color }: { label: string, val: string | number, icon: any, color: string }) {
   return (
     <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl backdrop-blur-sm">
       <div className="flex items-center justify-between mb-2">
@@ -319,24 +331,20 @@ function StatCard({ label, val, icon: Icon, color }: StatCardProps) {
   );
 }
 
-interface RecentActivityProps {
-  logs: ActivityLog[];
-}
-
-function RecentActivity({ logs }: RecentActivityProps) {
+function RecentActivity({ logs }: { logs: ActivityLog[] }) {
   return (
     <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden">
-      <div className="p-4 border-b border-slate-800 font-bold text-white flex items-center gap-2"><Activity className="h-4 w-4 text-blue-400" /> Traffic Intelligence</div>
-      <table className="w-full text-left text-xs text-slate-400">
-        <thead className="bg-slate-950/50 text-slate-500 uppercase font-bold text-[9px]">
-          <tr><th className="p-4">Time</th><th className="p-4">User</th><th className="p-4">Action</th><th className="p-4">Loc</th></tr>
+      <div className="p-4 border-b border-slate-800 font-bold text-white flex items-center gap-2"><Activity className="h-4 w-4 text-blue-400" /> Intelligence Feed</div>
+      <table className="w-full text-left text-[10px] text-slate-400">
+        <thead className="bg-slate-950/50 text-slate-500 uppercase font-bold text-[8px]">
+          <tr><th className="p-4">Time</th><th className="p-4">User</th><th className="p-4">Activity</th><th className="p-4">City</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-800">
           {logs.map((log: ActivityLog) => (
             <tr key={log.id} className="hover:bg-white/5">
-              <td className="p-4 font-mono">{new Date(log.timestamp).toLocaleTimeString()}</td>
+              <td className="p-4 font-mono">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
               <td className="p-4 text-white font-medium">{log.email}</td>
-              <td className="p-4"><span className={`px-2 py-0.5 rounded-[4px] font-bold ${log.action === 'LOGIN' ? 'text-emerald-400 bg-emerald-500/10' : 'text-blue-400 bg-blue-500/10'}`}>{log.details}</span></td>
+              <td className="p-4"><span className={`px-1.5 py-0.5 rounded font-bold ${log.action === 'LOGIN' ? 'text-emerald-400 bg-emerald-500/10' : 'text-blue-400 bg-blue-500/10'}`}>{log.details}</span></td>
               <td className="p-4 text-slate-500">{log.location?.city || 'N/A'}</td>
             </tr>
           ))}
@@ -346,22 +354,15 @@ function RecentActivity({ logs }: RecentActivityProps) {
   );
 }
 
-interface InputProps {
-  label: string;
-  val: string | number;
-  onChange: (val: string) => void;
-  type?: string;
-}
-
-function Input({ label, val, onChange, type = 'text' }: InputProps) {
+function Input({ label, val, onChange, type = 'text' }: { label: string, val: string | number, onChange: (v: string) => void, type?: string }) {
   return (
     <div className="space-y-1">
-      <label className="text-[10px] font-bold text-slate-500 uppercase">{label}</label>
+      <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">{label}</label>
       <input 
         type={type} 
         value={val} 
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} 
-        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white outline-none focus:border-blue-500 transition-all" 
+        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white text-xs outline-none focus:border-blue-500 transition-all" 
       />
     </div>
   );

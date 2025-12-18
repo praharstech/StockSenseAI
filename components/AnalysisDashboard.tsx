@@ -13,7 +13,7 @@ interface AnalysisDashboardProps {
 
 const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onReset }) => {
   const { buyPrice, quantity, strategy } = input;
-  const currentPrice = data.currentPriceEstimate || buyPrice; // Fallback to buy price if detection fails
+  const currentPrice = data.currentPriceEstimate || buyPrice; 
   
   const totalInvestment = buyPrice * quantity;
   const currentValue = currentPrice * quantity;
@@ -22,7 +22,6 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
 
   const isProfitable = profitLoss >= 0;
 
-  // Custom Tooltip for the chart
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -95,11 +94,6 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
               "{reason}"
             </p>
           </div>
-          <div className="hidden lg:block">
-            <div className="px-4 py-2 bg-white/5 rounded-full text-[10px] font-bold text-slate-500 uppercase tracking-widest border border-white/10">
-              AI Verification Successful
-            </div>
-          </div>
         </div>
       </div>
     );
@@ -108,10 +102,8 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
       
-      {/* Top Advertisement */}
       <AdBanner variant="horizontal" />
 
-      {/* Strategy Badge */}
       <div className="flex justify-center">
         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
           strategy === 'intraday' 
@@ -123,7 +115,6 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
         </span>
       </div>
 
-      {/* Header Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800 backdrop-blur-md">
           <div className="flex items-center justify-between mb-2">
@@ -150,9 +141,6 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
             <span className={isProfitable ? 'text-emerald-500' : 'text-rose-500'}>
               {isProfitable ? '+' : ''}{profitLossPercent.toFixed(2)}%
             </span>
-            <span className="text-slate-500">
-             (Est. Price: ₹{currentPrice.toFixed(2)})
-            </span>
           </div>
         </div>
 
@@ -164,112 +152,81 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
           <div className={`text-2xl font-bold ${isProfitable ? 'text-emerald-400' : 'text-rose-400'}`}>
              {isProfitable ? '+' : '-'}₹{Math.abs(profitLoss).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div className="text-xs text-slate-500 mt-1">
-            Break-even: ₹{buyPrice.toFixed(2)}
-          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart Section */}
         <div className="lg:col-span-2 bg-slate-900/50 p-6 rounded-2xl border border-slate-800 backdrop-blur-md flex flex-col">
           <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-blue-400" /> 
-            AI Projected Movement {strategy === 'intraday' ? '(Next Session)' : '(7 Days)'}
+            AI Projected Movement
           </h3>
-          <div className="h-64 w-full flex-grow">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.chartData}>
+          <div className="w-full min-h-[300px]">
+            <ResponsiveContainer width="100%" height="100%" minHeight={300} aspect={2}>
+              <LineChart data={data.chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                 <XAxis 
                   dataKey="label" 
                   stroke="#64748b" 
-                  tick={{fill: '#64748b', fontSize: 12}} 
+                  tick={{fill: '#64748b', fontSize: 10}} 
                   tickLine={false}
                   axisLine={false}
                 />
                 <YAxis 
                   domain={['auto', 'auto']} 
                   stroke="#64748b"
-                  tick={{fill: '#64748b', fontSize: 12}}
+                  tick={{fill: '#64748b', fontSize: 10}}
                   tickFormatter={(value) => `₹${value}`}
                   tickLine={false}
                   axisLine={false}
                 />
                 <Tooltip content={<CustomTooltip />} />
-                <ReferenceLine y={buyPrice} stroke="#94a3b8" strokeDasharray="3 3" label={{ position: 'right',  value: 'Break Even', fill: '#94a3b8', fontSize: 10 }} />
+                <ReferenceLine y={buyPrice} stroke="#94a3b8" strokeDasharray="3 3" />
                 <Line 
                   type="monotone" 
                   dataKey="price" 
                   stroke="#3b82f6" 
                   strokeWidth={3}
                   dot={{ r: 4, fill: '#1e293b', stroke: '#3b82f6', strokeWidth: 2 }}
-                  activeDot={{ r: 6, fill: '#60a5fa' }}
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <p className="text-xs text-slate-500 mt-4 text-center italic">
-            * Projection generated by AI based on technical patterns. Not financial advice.
-          </p>
         </div>
 
-        {/* Right Sidebar */}
         <div className="flex flex-col gap-6">
           <AdBanner variant="sidebar" />
-          
           <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 backdrop-blur-md flex flex-col h-full">
              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <Newspaper className="h-5 w-5 text-purple-400" /> 
-              Latest Market News
+              <Newspaper className="h-5 w-5 text-purple-400" /> Market Context
             </h3>
             <div className="space-y-3 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
-              {data.news && data.news.length > 0 ? (
-                data.news.map((item, idx) => (
-                  <div key={idx} className="bg-slate-950/50 p-3 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors">
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="text-sm font-semibold text-slate-200 leading-tight">
-                        {item.headline}
-                      </h4>
-                      {item.sentiment === 'positive' && <ArrowUpRight className="h-4 w-4 text-emerald-500 flex-shrink-0" />}
-                      {item.sentiment === 'negative' && <ArrowDownRight className="h-4 w-4 text-rose-500 flex-shrink-0" />}
-                      {item.sentiment === 'neutral' && <Minus className="h-4 w-4 text-slate-500 flex-shrink-0" />}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-2 line-clamp-2">{item.summary}</p>
-                  </div>
-                ))
-              ) : (
-                 <div className="text-center text-slate-500 py-8">
-                   <p className="text-xs">No specific news headlines found.</p>
-                 </div>
-              )}
+              {data.news?.map((item, idx) => (
+                <div key={idx} className="bg-slate-950/50 p-3 rounded-xl border border-slate-800">
+                  <h4 className="text-xs font-semibold text-slate-200 leading-tight">{item.headline}</h4>
+                  <p className="text-[10px] text-slate-500 mt-2 line-clamp-2">{item.summary}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      {/* AI Analysis Text & Recommendation */}
       <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 backdrop-blur-md">
-        <div className="flex items-center justify-between mb-4">
-           <h3 className="text-lg font-bold text-white flex items-center gap-2">
-            <span className="text-2xl">✨</span> Gemini Market Analysis
-          </h3>
-        </div>
-        
-        <div className="prose prose-invert prose-sm max-w-none prose-headings:text-blue-200 prose-a:text-blue-400 border-b border-slate-800 pb-8 mb-4">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
+          <span className="text-xl">✨</span> Gemini Market Analysis
+        </h3>
+        <div className="prose prose-invert prose-sm max-w-none prose-headings:text-blue-200 prose-a:text-blue-400">
           <ReactMarkdown>{data.analysisText}</ReactMarkdown>
         </div>
-
-        {/* The requested strong buy/sell recommendation at the bottom of the report */}
         {getRecommendationUI()}
-
         {data.sources.length > 0 && (
           <div className="mt-8 pt-4 border-t border-slate-800/50">
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Grounding Sources</p>
-            <div className="flex flex-wrap gap-3">
-              {data.sources.slice(0, 4).map((source, idx) => (
-                <a key={idx} href={source.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-slate-950/50 hover:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 text-[11px] text-blue-400 transition-all">
-                  {source.title.length > 25 ? source.title.substring(0, 25) + '...' : source.title}
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Sources</p>
+            <div className="flex flex-wrap gap-2">
+              {data.sources.slice(0, 3).map((source, idx) => (
+                <a key={idx} href={source.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 bg-slate-950/50 px-3 py-1.5 rounded-lg border border-slate-800 text-[10px] text-blue-400">
+                  {source.title.substring(0, 20)}...
                   <ExternalLink className="h-3 w-3" />
                 </a>
               ))}
@@ -278,7 +235,6 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
         )}
       </div>
 
-      {/* Reset Button */}
       <button 
         onClick={onReset}
         className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-colors border border-slate-700 flex items-center justify-center gap-2"
