@@ -1,3 +1,4 @@
+
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -11,7 +12,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     define: {
       // Polyfill process.env.API_KEY so the existing code works without modification
-      'process.env.API_KEY': JSON.stringify(env.API_KEY)
+      // Added fallback to empty string to prevent "undefined" reference errors
+      'process.env.API_KEY': JSON.stringify(env.API_KEY || '')
     }
   };
 });

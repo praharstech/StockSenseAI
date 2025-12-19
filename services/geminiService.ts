@@ -1,27 +1,37 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, StockQuote } from "../types";
 
 /**
  * Robustly extracts JSON from a string that might contain markdown or conversational text.
+ * Uses regex to find the most likely JSON object or array boundaries.
  */
 const extractJson = (text: string) => {
   if (!text) return null;
   
-  // 1. Strip markdown code blocks if present
+  // 1. Strip common markdown artifacts
   let cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
   
-  // 2. Try direct parse
+  // 2. Attempt direct parse
   try {
     return JSON.parse(cleaned);
   } catch (e) {
-    // 3. Fallback: find the actual JSON boundaries ({...} or [...])
+    // 3. Regex Fallback: Search for first { to last } or first [ to last ]
+    const jsonMatch = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (innerError) {
+        console.warn("JSON extraction regex failed to parse:", innerError);
+      }
+    }
+    
+    // 4. Manual Boundary Check (Last resort)
     const firstBrace = cleaned.indexOf('{');
     const firstBracket = cleaned.indexOf('[');
-    
     let start = -1;
     let endChar = '';
-    
-    // Determine if we're looking for an object or an array
+
     if (firstBrace !== -1 && (firstBracket === -1 || (firstBrace < firstBracket && firstBrace !== -1))) {
       start = firstBrace;
       endChar = '}';
@@ -29,19 +39,17 @@ const extractJson = (text: string) => {
       start = firstBracket;
       endChar = ']';
     }
-    
+
     if (start !== -1) {
       const end = cleaned.lastIndexOf(endChar);
       if (end > start) {
         try {
-          const jsonStr = cleaned.substring(start, end + 1);
-          return JSON.parse(jsonStr);
-        } catch (innerError) {
-          console.warn("JSON boundary extraction failed:", innerError);
+          return JSON.parse(cleaned.substring(start, end + 1));
+        } catch (finalError) {
+          console.error("All JSON extraction methods failed.");
         }
       }
     }
-    console.error("Failed to extract JSON from text:", text);
     return null;
   }
 };
@@ -50,20 +58,15 @@ const extractJson = (text: string) => {
  * Fetches the current price and provides quick buy/sell suggestions.
  */
 export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
-  // Create instance right before call as per guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     const prompt = `
-      Find the current real-time market price for stock "${symbol}" in Indian Rupee (INR) using Google Search.
-      Suggest entry and target prices based on today's volatility.
-      
-      Return ONLY a raw JSON object with:
-      {
-        "currentPrice": number,
-        "suggestedBuy": number,
-        "suggestedSell": number
-      }
+      Search for the latest real-time stock price of "${symbol}" on Indian markets (NSE/BSE).
+      Provide a specific JSON object. 
+      Ensure values are numbers representing the price in INR.
+      Format your response exactly like this example, but with real data:
+      {"currentPrice": 2450.50, "suggestedBuy": 2420.00, "suggestedSell": 2550.00}
     `;
 
     const response = await ai.models.generateContent({
@@ -71,11 +74,12 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a precise financial data extractor. Your output must be strictly valid JSON and nothing else.",
+        systemInstruction: "You are a specialized financial data agent. Extract real-time data from search results and return it as clean, valid JSON. Do not add explanations.",
       },
     });
 
-    const rawData = extractJson(response.text || "{}") || {};
+    const responseText = response.text || "{}";
+    const rawData = extractJson(responseText) || {};
 
     const sources: GroundingSource[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
@@ -118,18 +122,19 @@ export const analyzeStockPosition = async (
   
   try {
     const strategyInstructions = strategy === 'intraday' 
-      ? "Focus on hourly volatility and immediate risk."
-      : "Focus on fundamental trends and 7-day outlook.";
+      ? "Focus on high-frequency movements and immediate support/resistance for today's session."
+      : "Focus on fundamentals, weekly trends, and a 7-day price forecast.";
 
     const analysisPrompt = `
-      Analyze "${symbol}" (${quantity} shares @ ₹${buyPrice}). 
-      Strategy: ${strategy}. ${strategyInstructions}
+      Perform a deep analysis for "${symbol}" (${quantity} shares bought at ₹${buyPrice}). 
+      Current Strategy: ${strategy}. 
+      ${strategyInstructions}
       
-      Output components:
-      1. NEWS_ITEM: <Headline> | <Summary> | <Sentiment> (Extract at least 3)
-      2. Analysis of the current position.
-      3. CURRENT_PRICE: ₹<Value>
-      4. FINAL_RECOMMENDATION: <SIGNAL> | <PRICE> | <REASON>
+      Required Output Format:
+      - Extract at least 3 NEWS_ITEMs: Headline | Summary | Sentiment (Positive/Negative/Neutral)
+      - Provide a detailed analysis text.
+      - Identify the CURRENT_PRICE: ₹Value
+      - Provide a FINAL_RECOMMENDATION: SIGNAL (STRONG_BUY/STRONG_SELL/NEUTRAL/WAIT) | PRICE | REASON
     `;
 
     const analysisResponse = await ai.models.generateContent({
@@ -137,13 +142,13 @@ export const analyzeStockPosition = async (
       contents: analysisPrompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a professional stock market analyst providing data-driven insights.",
+        systemInstruction: "You are an expert stock market analyst. Use provided search results to give accurate, grounded financial advice.",
       },
     });
 
     const chartPrompt = `
-      Generate 7 projected price points for "${symbol}" for the next ${strategy === 'intraday' ? 'session' : 'week'}.
-      Start price should be around ${buyPrice}. Output JSON array of objects with "label" and "price".
+      Project 7 future price points for "${symbol}" based on current volatility and the ${strategy} strategy.
+      Return ONLY a JSON array of objects with "label" (e.g., "10:00 AM" or "Day 1") and "price" (number).
     `;
 
     const chartResponse = await ai.models.generateContent({
@@ -241,7 +246,7 @@ export const analyzeStockPosition = async (
     };
 
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("Gemini Analysis Error:", error);
     throw new Error("Failed to analyze stock data.");
   }
 };
