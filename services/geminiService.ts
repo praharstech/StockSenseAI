@@ -1,8 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, StockQuote } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 /**
  * Robustly extracts JSON from a string that might contain markdown or conversational text.
  */
@@ -16,14 +14,15 @@ const extractJson = (text: string) => {
   try {
     return JSON.parse(cleaned);
   } catch (e) {
-    // 3. Fallback: find the actual JSON boundaries
+    // 3. Fallback: find the actual JSON boundaries ({...} or [...])
     const firstBrace = cleaned.indexOf('{');
     const firstBracket = cleaned.indexOf('[');
     
     let start = -1;
     let endChar = '';
     
-    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    // Determine if we're looking for an object or an array
+    if (firstBrace !== -1 && (firstBracket === -1 || (firstBrace < firstBracket && firstBrace !== -1))) {
       start = firstBrace;
       endChar = '}';
     } else if (firstBracket !== -1) {
@@ -35,7 +34,8 @@ const extractJson = (text: string) => {
       const end = cleaned.lastIndexOf(endChar);
       if (end > start) {
         try {
-          return JSON.parse(cleaned.substring(start, end + 1));
+          const jsonStr = cleaned.substring(start, end + 1);
+          return JSON.parse(jsonStr);
         } catch (innerError) {
           console.warn("JSON boundary extraction failed:", innerError);
         }
@@ -50,6 +50,9 @@ const extractJson = (text: string) => {
  * Fetches the current price and provides quick buy/sell suggestions.
  */
 export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
+  // Create instance right before call as per guidelines
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   try {
     const prompt = `
       Find the current real-time market price for stock "${symbol}" in Indian Rupee (INR) using Google Search.
@@ -110,6 +113,7 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
 export const analyzeStockPosition = async (
   input: StockData
 ): Promise<AnalysisResult> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const { symbol, buyPrice, quantity, strategy } = input;
   
   try {
@@ -139,7 +143,7 @@ export const analyzeStockPosition = async (
 
     const chartPrompt = `
       Generate 7 projected price points for "${symbol}" for the next ${strategy === 'intraday' ? 'session' : 'week'}.
-      Start price should be around ${buyPrice}. Output JSON array of {label: string, price: number}.
+      Start price should be around ${buyPrice}. Output JSON array of objects with "label" and "price".
     `;
 
     const chartResponse = await ai.models.generateContent({
