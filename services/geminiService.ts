@@ -51,8 +51,7 @@ const extractJson = (text: string) => {
 const getAIClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    console.error("Missing API_KEY environment variable.");
-    throw new Error("Application Configuration Error: Missing API Key.");
+    throw new Error("API Key is missing. Ensure API_KEY is set in Vercel Environment Variables.");
   }
   return new GoogleGenAI({ apiKey });
 };
