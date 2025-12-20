@@ -46,13 +46,21 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
   try {
     const ai = getAIClient();
     
-    // We use a high-instruction system prompt to force structured output
+    // Normalize symbol for Indian markets if it looks like a ticker
+    const searchSymbol = symbol.includes(':') ? symbol : `NSE:${symbol}`;
+
     const prompt = `
-      Perform a real-time web search for the latest share price of "${symbol}" on the NSE (National Stock Exchange of India) or BSE.
-      Locate the current trading price, a 52-week low for suggested buy, and a consensus target for suggested sell.
+      Perform an URGENT web search for the LATEST real-time share price of the Indian stock "${searchSymbol}" on NSE (National Stock Exchange) or BSE.
       
-      Respond ONLY with a JSON object in this format:
-      {"currentPrice": number, "suggestedBuy": number, "suggestedSell": number}
+      Find:
+      1. The current market price in INR.
+      2. A logical "Good Buy" entry price (e.g., a recent support level or 5% below current).
+      3. A logical "Target" sell price (e.g., a recent resistance or 10% above current).
+      
+      Respond with ONLY a JSON object in this format:
+      {"currentPrice": 1234.50, "suggestedBuy": 1180.00, "suggestedSell": 1350.00}
+      
+      If you cannot find the exact price, provide your best estimate based on the search results.
     `;
 
     const response = await ai.models.generateContent({
@@ -60,12 +68,25 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a precise financial data extractor. Return only raw JSON data based on real-time search results. Do not include any conversational text.",
+        systemInstruction: "You are a professional financial data extractor specialized in the Indian Stock Market. Always return raw JSON. If prices aren't found, estimate based on the latest available market news found in search.",
       },
     });
 
     const responseText = response.text || "";
-    const rawData = extractJson(responseText);
+    let rawData = extractJson(responseText);
+
+    // Heuristic Fallback: If JSON extraction failed, look for any numbers in the text
+    if (!rawData || typeof rawData.currentPrice !== 'number' || rawData.currentPrice === 0) {
+      const numbers = responseText.match(/\d+(\.\d+)?/g);
+      if (numbers && numbers.length >= 1) {
+        const price = parseFloat(numbers[0]);
+        rawData = {
+          currentPrice: price,
+          suggestedBuy: price * 0.96,
+          suggestedSell: price * 1.08
+        };
+      }
+    }
 
     const sources: GroundingSource[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
@@ -77,9 +98,8 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       });
     }
 
-    if (!rawData || typeof rawData.currentPrice !== 'number') {
-      console.error("Gemini returned invalid data structure:", responseText);
-      throw new Error("Invalid data format received from AI.");
+    if (!rawData || !rawData.currentPrice || rawData.currentPrice === 0) {
+      throw new Error(`Unable to verify price for ${symbol}. Please check the ticker symbol.`);
     }
 
     return {
@@ -90,16 +110,8 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
     };
   } catch (error: any) {
     console.error("Stock Quote Fetch Error:", error);
-    // Return zeros only if there is a genuine failure, 
-    // but propagate config errors so the UI can show the Setup prompt.
     if (error.message.includes("Configuration Required")) throw error;
-    
-    return {
-      currentPrice: 0,
-      suggestedBuy: 0,
-      suggestedSell: 0,
-      sources: []
-    };
+    throw error; // Rethrow to let component handle the specific message
   }
 };
 
@@ -118,7 +130,7 @@ export const analyzeStockPosition = async (
       : "Focus on fundamental strength and sector outlook.";
 
     const analysisPrompt = `
-      Deep analysis for "${symbol}" (${quantity} units @ ₹${buyPrice}). Strategy: ${strategy}. 
+      Deep analysis for the Indian stock "${symbol}" (${quantity} units @ ₹${buyPrice}). Strategy: ${strategy}. 
       ${strategyInstructions}
       
       Requirements:
@@ -133,7 +145,7 @@ export const analyzeStockPosition = async (
       contents: analysisPrompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a professional equity researcher. Use Google Search grounding to verify all news and prices.",
+        systemInstruction: "You are a professional equity researcher specializing in Indian markets. Use Google Search grounding to verify all news and prices.",
       },
     });
 

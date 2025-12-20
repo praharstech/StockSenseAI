@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { StockData, StockQuote, ManualSuggestion } from '../types';
 import { getStockQuote } from '../services/geminiService';
@@ -7,7 +6,7 @@ import { getLogs } from '../services/trackingService';
 import { 
   Search, IndianRupee, PieChart, ArrowRight, Zap, TrendingUp, 
   Loader2, Target, ArrowDownCircle, ArrowUpCircle, Lightbulb,
-  Clock, Heart, ExternalLink
+  Clock, Heart, ExternalLink, AlertCircle
 } from 'lucide-react';
 
 interface StockInputProps {
@@ -32,7 +31,6 @@ const StockInput: React.FC<StockInputProps> = ({ onSubmit, isLoading, userEmail 
     const userLogs = getLogs().filter(l => l.email === userEmail && l.action === 'SEARCH_STOCK');
     const userInterests = new Set(userLogs.map(l => l.details.replace('Searched ', '')));
 
-    // Sort: 1. Targeted to specific user, 2. Public but matching user interests, 3. General public
     const prioritizedSugs = allSugs.sort((a, b) => {
       const aTargeted = a.targetUserEmail === userEmail;
       const bTargeted = b.targetUserEmail === userEmail;
@@ -70,8 +68,8 @@ const StockInput: React.FC<StockInputProps> = ({ onSubmit, isLoading, userEmail 
     try {
       const data = await getStockQuote(symbol);
       setQuoteData(data);
-    } catch (e) {
-      setQuoteError("Could not fetch price. Try again.");
+    } catch (e: any) {
+      setQuoteError(e.message || "Could not fetch price. Try again.");
     } finally {
       setIsFetchingQuote(false);
     }
@@ -79,7 +77,7 @@ const StockInput: React.FC<StockInputProps> = ({ onSubmit, isLoading, userEmail 
 
   const applyBuyPrice = () => {
     if (quoteData && quoteData.suggestedBuy) {
-      setBuyPrice(quoteData.suggestedBuy.toString());
+      setBuyPrice(quoteData.suggestedBuy.toFixed(2));
     }
   };
 
@@ -148,36 +146,43 @@ const StockInput: React.FC<StockInputProps> = ({ onSubmit, isLoading, userEmail 
               </button>
             </div>
             
+            {quoteError && (
+              <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs mt-2 animate-in slide-in-from-top-1">
+                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                <span>{quoteError}</span>
+              </div>
+            )}
+
             {quoteData && (
-              <div className="space-y-2 mt-3">
+              <div className="space-y-2 mt-3 animate-in fade-in zoom-in duration-300">
                 <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 grid grid-cols-3 gap-3">
                   <div className="text-center">
                     <p className="text-[9px] text-slate-500 font-bold tracking-tighter uppercase">Market</p>
-                    <p className="text-white font-bold text-sm">₹{quoteData.currentPrice.toFixed(1)}</p>
+                    <p className="text-white font-bold text-sm">₹{quoteData.currentPrice.toLocaleString('en-IN')}</p>
                   </div>
                   <div 
-                    className="text-center cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 rounded-xl py-1"
+                    className="text-center cursor-pointer bg-emerald-500/5 hover:bg-emerald-500/10 rounded-xl py-1 border border-emerald-500/20"
                     onClick={applyBuyPrice}
+                    title="Click to apply this buy price"
                   >
-                    <p className="text-[9px] text-slate-500 font-bold tracking-tighter uppercase">Use Buy</p>
-                    <p className="text-emerald-400 font-bold text-sm">₹{quoteData.suggestedBuy.toFixed(1)}</p>
+                    <p className="text-[9px] text-emerald-500/70 font-bold tracking-tighter uppercase">Use Buy</p>
+                    <p className="text-emerald-400 font-bold text-sm">₹{quoteData.suggestedBuy.toLocaleString('en-IN')}</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-[9px] text-slate-500 font-bold tracking-tighter uppercase">Target</p>
-                    <p className="text-rose-400 font-bold text-sm">₹{quoteData.suggestedSell.toFixed(1)}</p>
+                    <p className="text-[9px] text-rose-500/70 font-bold tracking-tighter uppercase">Target</p>
+                    <p className="text-rose-400 font-bold text-sm">₹{quoteData.suggestedSell.toLocaleString('en-IN')}</p>
                   </div>
                 </div>
-                {/* Always extract the URLs from groundingChunks and list them on the web app when Google Search is used */}
                 {quoteData.sources && quoteData.sources.length > 0 && (
                   <div className="px-2 flex flex-wrap gap-2 items-center">
-                    <span className="text-[8px] text-slate-600 font-bold uppercase tracking-tight">Sources:</span>
+                    <span className="text-[8px] text-slate-600 font-bold uppercase tracking-tight">Data Sources:</span>
                     {quoteData.sources.slice(0, 2).map((source, idx) => (
                       <a 
                         key={idx} 
                         href={source.uri} 
                         target="_blank" 
                         rel="noopener noreferrer" 
-                        className="text-[8px] text-blue-500/70 hover:text-blue-400 hover:underline truncate max-w-[100px] flex items-center gap-0.5"
+                        className="text-[8px] text-blue-500/70 hover:text-blue-400 hover:underline truncate max-w-[120px] flex items-center gap-0.5"
                       >
                         {source.title} <ExternalLink className="h-2 w-2" />
                       </a>
