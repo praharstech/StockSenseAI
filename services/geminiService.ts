@@ -2,48 +2,42 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, StockQuote } from "../types";
 
 /**
- * Robustly extracts JSON from a string that might contain markdown or conversational text.
+ * Ultra-robust JSON extraction. 
+ * Locates the outermost JSON object or array in a string to ignore conversational prefix/suffix text.
  */
 const extractJson = (text: string) => {
   if (!text) return null;
   
-  // 1. Strip common markdown artifacts
+  // 1. Strip markdown code block markers
   let cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
   
-  // 2. Attempt direct parse
+  // 2. Try direct parse
   try {
     return JSON.parse(cleaned);
   } catch (e) {
-    // 3. Regex Fallback: Search for the main JSON structure
-    const jsonMatch = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[0]);
-      } catch (innerError) {
-        console.warn("JSON extraction regex failed to parse:", innerError);
-      }
-    }
-    
-    // 4. Manual Boundary Check for messy strings
+    // 3. Find boundaries manually (Robust fallback)
     const firstBrace = cleaned.indexOf('{');
     const firstBracket = cleaned.indexOf('[');
+    
     let start = -1;
     let endChar = '';
 
-    if (firstBrace !== -1 && (firstBracket === -1 || (firstBrace < firstBracket && firstBrace !== -1))) {
+    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
       start = firstBrace;
       endChar = '}';
     } else if (firstBracket !== -1) {
       start = firstBracket;
+      endChar = ']';
     }
 
     if (start !== -1) {
-      const end = cleaned.lastIndexOf(endChar || ']');
+      const end = cleaned.lastIndexOf(endChar);
       if (end > start) {
         try {
-          return JSON.parse(cleaned.substring(start, end + 1));
-        } catch (finalError) {
-          console.error("All JSON extraction methods failed.");
+          const jsonString = cleaned.substring(start, end + 1);
+          return JSON.parse(jsonString);
+        } catch (innerError) {
+          console.error("Failed to parse extracted JSON chunk:", innerError);
         }
       }
     }
@@ -57,23 +51,27 @@ const extractJson = (text: string) => {
 const getAIClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API Key is missing. Ensure API_KEY is set in Vercel Environment Variables.");
+    console.error("Missing API_KEY environment variable.");
+    throw new Error("Application Configuration Error: Missing API Key.");
   }
   return new GoogleGenAI({ apiKey });
 };
 
 /**
  * Fetches the current price and provides quick buy/sell suggestions.
- * Uses Google Search to find real-time market data.
+ * Optimized for NSE/BSE real-time data using Google Search grounding.
  */
 export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
   try {
     const ai = getAIClient();
     const prompt = `
-      Perform a real-time web search for the current share price of "${symbol}" on the NSE or BSE (India).
-      Respond ONLY with a JSON object. Ensure the values are numbers. 
-      Example format:
-      {"currentPrice": 1234.50, "suggestedBuy": 1220.00, "suggestedSell": 1300.00}
+      Search the web for the absolute latest real-time share price of "${symbol}" on the NSE or BSE India markets.
+      Return ONLY a JSON object with the following fields (numbers only):
+      {
+        "currentPrice": (latest price in INR),
+        "suggestedBuy": (calculated support price),
+        "suggestedSell": (short term target price)
+      }
     `;
 
     const response = await ai.models.generateContent({
@@ -81,7 +79,7 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a precise financial data fetcher. Your only job is to search the web for current stock prices and return them in raw JSON format. Do not add any conversational text.",
+        systemInstruction: "You are a specialized stock market data engine. Provide raw real-time price data in JSON. No conversational chatter.",
       },
     });
 
@@ -129,19 +127,19 @@ export const analyzeStockPosition = async (
   try {
     const ai = getAIClient();
     const strategyInstructions = strategy === 'intraday' 
-      ? "Focus on immediate volatility, key support/resistance for today, and news from the last 24 hours."
-      : "Focus on fundamental growth drivers, earnings trends, and a 1-week outlook.";
+      ? "Prioritize today's technical levels, immediate volume spikes, and hourly resistance points."
+      : "Focus on sector trends, fundamental strength, and a 5-10 day trend analysis.";
 
     const analysisPrompt = `
-      Analyze the current market position of "${symbol}" (${quantity} shares bought at ₹${buyPrice}). 
-      Strategy: ${strategy}. 
+      Deep dive analysis for "${symbol}" (${quantity} units @ ₹${buyPrice}). 
+      Strategy Mode: ${strategy}. 
       ${strategyInstructions}
       
-      You must provide:
-      1. At least 3 NEWS_ITEM entries: Headline | Summary | Sentiment (Positive/Negative/Neutral)
-      2. A CURRENT_PRICE estimate based on your search.
-      3. A FINAL_RECOMMENDATION: SIGNAL (STRONG_BUY/STRONG_SELL/NEUTRAL/WAIT) | PRICE | REASON
-      4. A detailed reasoning text.
+      You MUST provide:
+      1. NEWS_ITEM: Headline | Summary | Sentiment (Positive/Negative/Neutral) [Min 3 items]
+      2. CURRENT_PRICE: Estimated live value.
+      3. FINAL_RECOMMENDATION: SIGNAL (STRONG_BUY/STRONG_SELL/NEUTRAL/WAIT) | PRICE | REASON
+      4. Detailed reasoning in Markdown.
     `;
 
     const analysisResponse = await ai.models.generateContent({
@@ -149,13 +147,13 @@ export const analyzeStockPosition = async (
       contents: analysisPrompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a professional financial analyst. Use real-time search grounding to analyze stock positions and news. Be objective and data-driven.",
+        systemInstruction: "You are a professional equity researcher. Use Google Search grounding to verify all claims and news. Provide high-conviction signals.",
       },
     });
 
     const chartPrompt = `
-      Project the next 7 price points for "${symbol}" based on current trends. 
-      Return a JSON array of objects with "label" and "price".
+      Project the next 7 specific price points for "${symbol}" based on current momentum. 
+      Return only a JSON array: [{"label": "Day 1", "price": 123.4}, ...]
     `;
 
     const chartResponse = await ai.models.generateContent({
@@ -177,7 +175,7 @@ export const analyzeStockPosition = async (
       },
     });
 
-    let analysisText = analysisResponse.text || "No analysis available.";
+    let analysisText = analysisResponse.text || "Analysis pending...";
     
     const sources: GroundingSource[] = [];
     const chunks = analysisResponse.candidates?.[0]?.groundingMetadata?.groundingChunks;
@@ -254,6 +252,6 @@ export const analyzeStockPosition = async (
 
   } catch (error) {
     console.error("Gemini Analysis Error:", error);
-    throw new Error("Failed to analyze stock data.");
+    throw new Error("Market Intelligence Link Interrupted. Check your API Key.");
   }
 };
