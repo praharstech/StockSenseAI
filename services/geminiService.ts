@@ -3,7 +3,6 @@ import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, S
 
 /**
  * Robustly extracts JSON from a string that might contain markdown or conversational text.
- * Improved to handle edge cases in Vercel/Production environments.
  */
 const extractJson = (text: string) => {
   if (!text) return null;
@@ -36,16 +35,15 @@ const extractJson = (text: string) => {
       endChar = '}';
     } else if (firstBracket !== -1) {
       start = firstBracket;
-      endChar = ']';
     }
 
     if (start !== -1) {
-      const end = cleaned.lastIndexOf(endChar);
+      const end = cleaned.lastIndexOf(endChar || ']');
       if (end > start) {
         try {
           return JSON.parse(cleaned.substring(start, end + 1));
         } catch (finalError) {
-          console.error("All JSON extraction methods failed for input:", text.substring(0, 100) + "...");
+          console.error("All JSON extraction methods failed.");
         }
       }
     }
@@ -54,13 +52,23 @@ const extractJson = (text: string) => {
 };
 
 /**
+ * Validates and returns the AI client.
+ */
+const getAIClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API Key is missing. Ensure API_KEY is set in Vercel Environment Variables.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
+
+/**
  * Fetches the current price and provides quick buy/sell suggestions.
  * Uses Google Search to find real-time market data.
  */
 export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
   try {
+    const ai = getAIClient();
     const prompt = `
       Perform a real-time web search for the current share price of "${symbol}" on the NSE or BSE (India).
       Respond ONLY with a JSON object. Ensure the values are numbers. 
@@ -116,10 +124,10 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
 export const analyzeStockPosition = async (
   input: StockData
 ): Promise<AnalysisResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const { symbol, buyPrice, quantity, strategy } = input;
   
   try {
+    const ai = getAIClient();
     const strategyInstructions = strategy === 'intraday' 
       ? "Focus on immediate volatility, key support/resistance for today, and news from the last 24 hours."
       : "Focus on fundamental growth drivers, earnings trends, and a 1-week outlook.";
