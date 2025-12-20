@@ -6,7 +6,7 @@ import AdminDashboard from './components/AdminDashboard';
 import { StockData, AnalysisState, UserLocation } from './types';
 import { analyzeStockPosition } from './services/geminiService';
 import { logActivity } from './services/trackingService';
-import { LineChart, BrainCircuit, LogOut } from 'lucide-react';
+import { LineChart, BrainCircuit, LogOut, AlertCircle, Settings } from 'lucide-react';
 
 type ViewMode = 'USER_LOGIN' | 'USER_APP' | 'ADMIN_DASHBOARD';
 
@@ -46,10 +46,10 @@ const App: React.FC = () => {
     try {
       const result = await analyzeStockPosition(data);
       setAnalysis({ loading: false, error: null, result });
-    } catch (error) {
+    } catch (error: any) {
       setAnalysis({
         loading: false,
-        error: "Failed to fetch analysis. Please try again.",
+        error: error.message || "Failed to fetch analysis. Please try again.",
         result: null,
       });
     }
@@ -67,6 +67,8 @@ const App: React.FC = () => {
       </div>
     );
   }
+
+  const isConfigError = analysis.error?.includes("Configuration Required");
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30">
@@ -160,13 +162,29 @@ const App: React.FC = () => {
             )}
 
             {analysis.error && (
-              <div className="w-full max-w-md bg-rose-950/30 border border-rose-900/50 p-6 rounded-2xl text-center space-y-4 animate-in shake">
-                <p className="text-rose-400">{analysis.error}</p>
+              <div className={`w-full max-w-lg p-8 rounded-3xl text-center space-y-6 animate-in zoom-in duration-300 border ${
+                isConfigError ? 'bg-amber-950/20 border-amber-500/30' : 'bg-rose-950/30 border-rose-900/50'
+              }`}>
+                <div className="flex justify-center">
+                  <div className={`p-4 rounded-full ${isConfigError ? 'bg-amber-500/10' : 'bg-rose-500/10'}`}>
+                    {isConfigError ? <Settings className="h-10 w-10 text-amber-400" /> : <AlertCircle className="h-10 w-10 text-rose-400" />}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className={`text-xl font-bold ${isConfigError ? 'text-amber-400' : 'text-rose-400'}`}>
+                    {isConfigError ? "Configuration Required" : "Analysis Interrupted"}
+                  </h3>
+                  <p className="text-slate-400 text-sm leading-relaxed px-4">
+                    {analysis.error}
+                  </p>
+                </div>
                 <button 
                   onClick={handleReset}
-                  className="text-sm bg-rose-900/50 hover:bg-rose-900 px-4 py-2 rounded-lg text-rose-200 transition-colors"
+                  className={`w-full py-4 rounded-xl font-bold text-white transition-all active:scale-95 ${
+                    isConfigError ? 'bg-amber-600 hover:bg-amber-500' : 'bg-rose-600 hover:bg-rose-500'
+                  }`}
                 >
-                  Try Again
+                  {isConfigError ? "Return to Dashboard" : "Try Again"}
                 </button>
               </div>
             )}

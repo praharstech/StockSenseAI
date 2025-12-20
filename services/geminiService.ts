@@ -3,7 +3,7 @@ import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, S
 
 /**
  * Ultra-robust JSON extraction. 
- * Locates the outermost JSON object or array in a string to ignore conversational prefix/suffix text.
+ * Locates the outermost JSON object or array in a string to ignore conversational prefix/suffix text or thinking tokens.
  */
 const extractJson = (text: string) => {
   if (!text) return null;
@@ -15,7 +15,7 @@ const extractJson = (text: string) => {
   try {
     return JSON.parse(cleaned);
   } catch (e) {
-    // 3. Find boundaries manually (Robust fallback)
+    // 3. Find boundaries manually (Robust fallback for cases with preamble text)
     const firstBrace = cleaned.indexOf('{');
     const firstBracket = cleaned.indexOf('[');
     
@@ -47,11 +47,16 @@ const extractJson = (text: string) => {
 
 /**
  * Validates and returns the AI client.
+ * Provides a highly descriptive error message for missing configuration.
  */
 const getAIClient = () => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API Key is missing. Ensure API_KEY is set in Vercel Environment Variables.");
+  if (!apiKey || apiKey === '') {
+    const errorMsg = "Configuration Required: Google Gemini API Key is missing. " +
+                     "Please add 'API_KEY' to your Vercel Environment Variables or local .env file. " +
+                     "Get a key at https://aistudio.google.com/app/apikey";
+    console.error(errorMsg);
+    throw new Error(errorMsg);
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -104,8 +109,10 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       suggestedSell: Number(rawData.suggestedSell) || 0,
       sources,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Quote Fetch Error:", error);
+    // Propagate configuration errors specifically
+    if (error.message.includes("Configuration Required")) throw error;
     return {
       currentPrice: 0,
       suggestedBuy: 0,
@@ -249,8 +256,9 @@ export const analyzeStockPosition = async (
       recommendation
     };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Analysis Error:", error);
-    throw new Error("Market Intelligence Link Interrupted. Check your API Key.");
+    if (error.message.includes("Configuration Required")) throw error;
+    throw new Error("Market Intelligence Link Interrupted. Please check your network or try again.");
   }
 };
