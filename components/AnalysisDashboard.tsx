@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { AnalysisResult, StockData } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -157,14 +156,13 @@ const AnalysisDashboard: React.FC<AnalysisDashboardProps> = ({ data, input, onRe
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-slate-900/50 p-6 rounded-2xl border border-slate-800 backdrop-blur-md flex flex-col">
+        <div className="lg:col-span-2 bg-slate-900/50 p-6 rounded-2xl border border-slate-800 backdrop-blur-md flex flex-col min-h-[400px]">
           <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-blue-400" /> 
             AI Projected Movement
           </h3>
-          {/* Wrapped in a div with a fixed height to resolve Recharts dimension warnings */}
-          <div style={{ width: '100%', height: '350px' }}>
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="flex-1 w-full min-h-[300px]">
+            <ResponsiveContainer width="100%" height="100%" minHeight={300}>
               <LineChart data={data.chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                 <XAxis 

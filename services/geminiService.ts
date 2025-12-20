@@ -1,10 +1,9 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, StockQuote } from "../types";
 
 /**
  * Robustly extracts JSON from a string that might contain markdown or conversational text.
- * Uses regex to find the most likely JSON object or array boundaries.
+ * Improved to handle edge cases in Vercel/Production environments.
  */
 const extractJson = (text: string) => {
   if (!text) return null;
@@ -16,7 +15,7 @@ const extractJson = (text: string) => {
   try {
     return JSON.parse(cleaned);
   } catch (e) {
-    // 3. Regex Fallback: Search for first { to last } or first [ to last ]
+    // 3. Regex Fallback: Search for the main JSON structure
     const jsonMatch = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
     if (jsonMatch) {
       try {
@@ -26,7 +25,7 @@ const extractJson = (text: string) => {
       }
     }
     
-    // 4. Manual Boundary Check (Last resort)
+    // 4. Manual Boundary Check for messy strings
     const firstBrace = cleaned.indexOf('{');
     const firstBracket = cleaned.indexOf('[');
     let start = -1;
@@ -46,7 +45,7 @@ const extractJson = (text: string) => {
         try {
           return JSON.parse(cleaned.substring(start, end + 1));
         } catch (finalError) {
-          console.error("All JSON extraction methods failed.");
+          console.error("All JSON extraction methods failed for input:", text.substring(0, 100) + "...");
         }
       }
     }
@@ -56,17 +55,17 @@ const extractJson = (text: string) => {
 
 /**
  * Fetches the current price and provides quick buy/sell suggestions.
+ * Uses Google Search to find real-time market data.
  */
 export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     const prompt = `
-      Search for the latest real-time stock price of "${symbol}" on Indian markets (NSE/BSE).
-      Provide a specific JSON object. 
-      Ensure values are numbers representing the price in INR.
-      Format your response exactly like this example, but with real data:
-      {"currentPrice": 2450.50, "suggestedBuy": 2420.00, "suggestedSell": 2550.00}
+      Perform a real-time web search for the current share price of "${symbol}" on the NSE or BSE (India).
+      Respond ONLY with a JSON object. Ensure the values are numbers. 
+      Example format:
+      {"currentPrice": 1234.50, "suggestedBuy": 1220.00, "suggestedSell": 1300.00}
     `;
 
     const response = await ai.models.generateContent({
@@ -74,7 +73,7 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a specialized financial data agent. Extract real-time data from search results and return it as clean, valid JSON. Do not add explanations.",
+        systemInstruction: "You are a precise financial data fetcher. Your only job is to search the web for current stock prices and return them in raw JSON format. Do not add any conversational text.",
       },
     });
 
@@ -95,9 +94,9 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
     }
 
     return {
-      currentPrice: typeof rawData.currentPrice === 'number' ? rawData.currentPrice : 0,
-      suggestedBuy: typeof rawData.suggestedBuy === 'number' ? rawData.suggestedBuy : 0,
-      suggestedSell: typeof rawData.suggestedSell === 'number' ? rawData.suggestedSell : 0,
+      currentPrice: Number(rawData.currentPrice) || 0,
+      suggestedBuy: Number(rawData.suggestedBuy) || 0,
+      suggestedSell: Number(rawData.suggestedSell) || 0,
       sources,
     };
   } catch (error) {
@@ -122,33 +121,33 @@ export const analyzeStockPosition = async (
   
   try {
     const strategyInstructions = strategy === 'intraday' 
-      ? "Focus on high-frequency movements and immediate support/resistance for today's session."
-      : "Focus on fundamentals, weekly trends, and a 7-day price forecast.";
+      ? "Focus on immediate volatility, key support/resistance for today, and news from the last 24 hours."
+      : "Focus on fundamental growth drivers, earnings trends, and a 1-week outlook.";
 
     const analysisPrompt = `
-      Perform a deep analysis for "${symbol}" (${quantity} shares bought at ₹${buyPrice}). 
-      Current Strategy: ${strategy}. 
+      Analyze the current market position of "${symbol}" (${quantity} shares bought at ₹${buyPrice}). 
+      Strategy: ${strategy}. 
       ${strategyInstructions}
       
-      Required Output Format:
-      - Extract at least 3 NEWS_ITEMs: Headline | Summary | Sentiment (Positive/Negative/Neutral)
-      - Provide a detailed analysis text.
-      - Identify the CURRENT_PRICE: ₹Value
-      - Provide a FINAL_RECOMMENDATION: SIGNAL (STRONG_BUY/STRONG_SELL/NEUTRAL/WAIT) | PRICE | REASON
+      You must provide:
+      1. At least 3 NEWS_ITEM entries: Headline | Summary | Sentiment (Positive/Negative/Neutral)
+      2. A CURRENT_PRICE estimate based on your search.
+      3. A FINAL_RECOMMENDATION: SIGNAL (STRONG_BUY/STRONG_SELL/NEUTRAL/WAIT) | PRICE | REASON
+      4. A detailed reasoning text.
     `;
 
     const analysisResponse = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3-pro-preview',
       contents: analysisPrompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are an expert stock market analyst. Use provided search results to give accurate, grounded financial advice.",
+        systemInstruction: "You are a professional financial analyst. Use real-time search grounding to analyze stock positions and news. Be objective and data-driven.",
       },
     });
 
     const chartPrompt = `
-      Project 7 future price points for "${symbol}" based on current volatility and the ${strategy} strategy.
-      Return ONLY a JSON array of objects with "label" (e.g., "10:00 AM" or "Day 1") and "price" (number).
+      Project the next 7 price points for "${symbol}" based on current trends. 
+      Return a JSON array of objects with "label" and "price".
     `;
 
     const chartResponse = await ai.models.generateContent({
