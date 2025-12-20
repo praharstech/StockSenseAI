@@ -22,7 +22,7 @@ const extractJson = (text: string) => {
     let start = -1;
     let endChar = '';
 
-    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    if (firstBrace !== -1 && (firstBracket === -1 || (firstBrace < firstBracket && firstBrace !== -1))) {
       start = firstBrace;
       endChar = '}';
     } else if (firstBracket !== -1) {
