@@ -2,19 +2,32 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, StockQuote } from "../types";
 
 /**
+ * Strips non-numeric characters (except decimal points) from a value.
+ * Vital for handling AI responses that might include currency symbols or commas.
+ */
+const cleanNumber = (val: any): number => {
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') {
+    const cleaned = val.replace(/[^\d.-]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : num;
+  }
+  return 0;
+};
+
+/**
  * Robust JSON extraction utility.
  * Searches for the first '{' and the last '}' to extract a JSON object from a potentially messy string.
  */
 const extractJson = (text: string) => {
   if (!text) return null;
   
-  // Try cleaning common markdown markers first
+  // Clean markdown blocks
   let cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
   
   try {
     return JSON.parse(cleaned);
   } catch (e) {
-    // Fallback: Find the boundaries of the first JSON object in the string
     const start = cleaned.indexOf('{');
     const end = cleaned.lastIndexOf('}');
     
@@ -23,7 +36,7 @@ const extractJson = (text: string) => {
         const potentialJson = cleaned.substring(start, end + 1);
         return JSON.parse(potentialJson);
       } catch (innerError) {
-        console.error("Manual JSON extraction failed", innerError);
+        console.debug("Manual JSON extraction failed", innerError);
       }
     }
     return null;
@@ -33,7 +46,7 @@ const extractJson = (text: string) => {
 const getAIClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey || apiKey === '') {
-    throw new Error("Configuration Required: Google Gemini API Key is missing. Add 'API_KEY' to your Vercel environment variables.");
+    throw new Error("Configuration Required: Google Gemini API Key is missing. Please add 'API_KEY' to your Vercel Environment Variables.");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -46,21 +59,15 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
   try {
     const ai = getAIClient();
     
-    // Normalize symbol for Indian markets if it looks like a ticker
-    const searchSymbol = symbol.includes(':') ? symbol : `NSE:${symbol}`;
+    // Normalize symbol for Indian markets
+    const searchSymbol = symbol.toUpperCase().includes(':') ? symbol.toUpperCase() : `NSE:${symbol.toUpperCase()}`;
 
     const prompt = `
-      Perform an URGENT web search for the LATEST real-time share price of the Indian stock "${searchSymbol}" on NSE (National Stock Exchange) or BSE.
+      Perform a search for the LATEST real-time share price of "${searchSymbol}" on the NSE or BSE India.
+      Find the current price, 52-week low, and target price.
       
-      Find:
-      1. The current market price in INR.
-      2. A logical "Good Buy" entry price (e.g., a recent support level or 5% below current).
-      3. A logical "Target" sell price (e.g., a recent resistance or 10% above current).
-      
-      Respond with ONLY a JSON object in this format:
-      {"currentPrice": 1234.50, "suggestedBuy": 1180.00, "suggestedSell": 1350.00}
-      
-      If you cannot find the exact price, provide your best estimate based on the search results.
+      Return ONLY a JSON object:
+      {"currentPrice": number_or_string, "suggestedBuy": number_or_string, "suggestedSell": number_or_string}
     `;
 
     const response = await ai.models.generateContent({
@@ -68,23 +75,25 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a professional financial data extractor specialized in the Indian Stock Market. Always return raw JSON. If prices aren't found, estimate based on the latest available market news found in search.",
+        systemInstruction: "You are a professional financial data extractor for Indian stocks. Return raw numeric data in JSON. If exact prices are unavailable, provide the most recent quoted price from the search results.",
       },
     });
 
     const responseText = response.text || "";
     let rawData = extractJson(responseText);
 
-    // Heuristic Fallback: If JSON extraction failed, look for any numbers in the text
-    if (!rawData || typeof rawData.currentPrice !== 'number' || rawData.currentPrice === 0) {
-      const numbers = responseText.match(/\d+(\.\d+)?/g);
+    // Heuristic Fallback: If JSON extraction failed, look for numbers in the text
+    if (!rawData || !cleanNumber(rawData.currentPrice)) {
+      const numbers = responseText.match(/\d{1,3}(?:,\d{3})*(?:\.\d+)?/g);
       if (numbers && numbers.length >= 1) {
-        const price = parseFloat(numbers[0]);
-        rawData = {
-          currentPrice: price,
-          suggestedBuy: price * 0.96,
-          suggestedSell: price * 1.08
-        };
+        const price = cleanNumber(numbers[0]);
+        if (price > 0) {
+          rawData = {
+            currentPrice: price,
+            suggestedBuy: price * 0.96,
+            suggestedSell: price * 1.08
+          };
+        }
       }
     }
 
@@ -98,20 +107,22 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       });
     }
 
-    if (!rawData || !rawData.currentPrice || rawData.currentPrice === 0) {
-      throw new Error(`Unable to verify price for ${symbol}. Please check the ticker symbol.`);
+    const currentPrice = cleanNumber(rawData?.currentPrice);
+
+    if (currentPrice <= 0) {
+      throw new Error(`Data Unavailable: Could not fetch real-time price for ${symbol}. Please verify the ticker or try again later.`);
     }
 
     return {
-      currentPrice: rawData.currentPrice,
-      suggestedBuy: rawData.suggestedBuy || rawData.currentPrice * 0.95,
-      suggestedSell: rawData.suggestedSell || rawData.currentPrice * 1.10,
+      currentPrice: currentPrice,
+      suggestedBuy: cleanNumber(rawData?.suggestedBuy) || currentPrice * 0.95,
+      suggestedSell: cleanNumber(rawData?.suggestedSell) || currentPrice * 1.10,
       sources,
     };
   } catch (error: any) {
     console.error("Stock Quote Fetch Error:", error);
     if (error.message.includes("Configuration Required")) throw error;
-    throw error; // Rethrow to let component handle the specific message
+    throw error;
   }
 };
 
@@ -126,11 +137,11 @@ export const analyzeStockPosition = async (
   try {
     const ai = getAIClient();
     const strategyInstructions = strategy === 'intraday' 
-      ? "Prioritize today's technical levels and immediate resistance."
-      : "Focus on fundamental strength and sector outlook.";
+      ? "Prioritize today's technical levels, volume spikes, and immediate resistance."
+      : "Focus on fundamental growth, sector trends, and long-term valuation.";
 
     const analysisPrompt = `
-      Deep analysis for the Indian stock "${symbol}" (${quantity} units @ ₹${buyPrice}). Strategy: ${strategy}. 
+      Deep analysis for Indian stock "${symbol}" (${quantity} units @ ₹${buyPrice}). Strategy: ${strategy}. 
       ${strategyInstructions}
       
       Requirements:
@@ -145,7 +156,7 @@ export const analyzeStockPosition = async (
       contents: analysisPrompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a professional equity researcher specializing in Indian markets. Use Google Search grounding to verify all news and prices.",
+        systemInstruction: "You are a senior equity analyst specializing in Indian markets. Use search grounding to provide factual, up-to-date data.",
       },
     });
 
@@ -170,7 +181,7 @@ export const analyzeStockPosition = async (
       },
     });
 
-    let analysisText = analysisResponse.text || "Analysis failed.";
+    let analysisText = analysisResponse.text || "Analysis link failed.";
     const sources: GroundingSource[] = [];
     const chunks = analysisResponse.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
@@ -198,7 +209,7 @@ export const analyzeStockPosition = async (
     if (recMatch) {
       recommendation = {
         signal: recMatch[1].trim() as any,
-        price: parseFloat(recMatch[2].replace(/,/g, '')),
+        price: cleanNumber(recMatch[2]),
         reason: recMatch[3].trim()
       };
     }
@@ -206,7 +217,7 @@ export const analyzeStockPosition = async (
     const priceMatch = analysisText.match(/CURRENT_PRICE:\s*[^\d]*([\d,]+\.?\d*)/i);
     let currentPriceEstimate = undefined;
     if (priceMatch && priceMatch[1]) {
-      currentPriceEstimate = parseFloat(priceMatch[1].replace(/,/g, ''));
+      currentPriceEstimate = cleanNumber(priceMatch[1]);
     }
 
     analysisText = analysisText
@@ -220,7 +231,7 @@ export const analyzeStockPosition = async (
     if (Array.isArray(rawChartData)) {
       chartData = rawChartData.map((item: any) => ({
         label: item.label,
-        price: item.price,
+        price: cleanNumber(item.price),
         type: 'forecast',
       }));
     }
@@ -237,6 +248,6 @@ export const analyzeStockPosition = async (
   } catch (error: any) {
     console.error("Gemini Analysis Error:", error);
     if (error.message.includes("Configuration Required")) throw error;
-    throw new Error("Market Intelligence Link Interrupted. Please check your API Key and network.");
+    throw new Error("Intelligence link interrupted. Please verify your connection or API configuration.");
   }
 };
