@@ -2,80 +2,57 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, ChartDataPoint, GroundingSource, StockData, NewsItem, StockQuote } from "../types";
 
 /**
- * Ultra-robust JSON extraction. 
- * Locates the outermost JSON object or array in a string to ignore conversational prefix/suffix text or thinking tokens.
+ * Robust JSON extraction utility.
+ * Searches for the first '{' and the last '}' to extract a JSON object from a potentially messy string.
  */
 const extractJson = (text: string) => {
   if (!text) return null;
   
-  // 1. Strip markdown code block markers
+  // Try cleaning common markdown markers first
   let cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
   
-  // 2. Try direct parse
   try {
     return JSON.parse(cleaned);
   } catch (e) {
-    // 3. Find boundaries manually (Robust fallback for cases with preamble text)
-    const firstBrace = cleaned.indexOf('{');
-    const firstBracket = cleaned.indexOf('[');
+    // Fallback: Find the boundaries of the first JSON object in the string
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
     
-    let start = -1;
-    let endChar = '';
-
-    if (firstBrace !== -1 && (firstBracket === -1 || (firstBrace < firstBracket && firstBrace !== -1))) {
-      start = firstBrace;
-      endChar = '}';
-    } else if (firstBracket !== -1) {
-      start = firstBracket;
-      endChar = ']';
-    }
-
-    if (start !== -1) {
-      const end = cleaned.lastIndexOf(endChar);
-      if (end > start) {
-        try {
-          const jsonString = cleaned.substring(start, end + 1);
-          return JSON.parse(jsonString);
-        } catch (innerError) {
-          console.error("Failed to parse extracted JSON chunk:", innerError);
-        }
+    if (start !== -1 && end !== -1 && end > start) {
+      try {
+        const potentialJson = cleaned.substring(start, end + 1);
+        return JSON.parse(potentialJson);
+      } catch (innerError) {
+        console.error("Manual JSON extraction failed", innerError);
       }
     }
     return null;
   }
 };
 
-/**
- * Validates and returns the AI client.
- * Provides a highly descriptive error message for missing configuration.
- */
 const getAIClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey || apiKey === '') {
-    const errorMsg = "Configuration Required: Google Gemini API Key is missing. " +
-                     "Please add 'API_KEY' to your Vercel Environment Variables or local .env file. " +
-                     "Get a key at https://aistudio.google.com/app/apikey";
-    console.error(errorMsg);
-    throw new Error(errorMsg);
+    throw new Error("Configuration Required: Google Gemini API Key is missing. Add 'API_KEY' to your Vercel environment variables.");
   }
   return new GoogleGenAI({ apiKey });
 };
 
 /**
  * Fetches the current price and provides quick buy/sell suggestions.
- * Optimized for NSE/BSE real-time data using Google Search grounding.
+ * Uses Google Search grounding to find real-time data for NSE/BSE.
  */
 export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
   try {
     const ai = getAIClient();
+    
+    // We use a high-instruction system prompt to force structured output
     const prompt = `
-      Search the web for the absolute latest real-time share price of "${symbol}" on the NSE or BSE India markets.
-      Return ONLY a JSON object with the following fields (numbers only):
-      {
-        "currentPrice": (latest price in INR),
-        "suggestedBuy": (calculated support price),
-        "suggestedSell": (short term target price)
-      }
+      Perform a real-time web search for the latest share price of "${symbol}" on the NSE (National Stock Exchange of India) or BSE.
+      Locate the current trading price, a 52-week low for suggested buy, and a consensus target for suggested sell.
+      
+      Respond ONLY with a JSON object in this format:
+      {"currentPrice": number, "suggestedBuy": number, "suggestedSell": number}
     `;
 
     const response = await ai.models.generateContent({
@@ -83,36 +60,40 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a specialized stock market data engine. Provide raw real-time price data in JSON. No conversational chatter.",
+        systemInstruction: "You are a precise financial data extractor. Return only raw JSON data based on real-time search results. Do not include any conversational text.",
       },
     });
 
-    const responseText = response.text || "{}";
-    const rawData = extractJson(responseText) || {};
+    const responseText = response.text || "";
+    const rawData = extractJson(responseText);
 
     const sources: GroundingSource[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
       chunks.forEach((chunk: any) => {
         if (chunk.web?.uri && chunk.web?.title) {
-          sources.push({
-            title: chunk.web.title,
-            uri: chunk.web.uri,
-          });
+          sources.push({ title: chunk.web.title, uri: chunk.web.uri });
         }
       });
     }
 
+    if (!rawData || typeof rawData.currentPrice !== 'number') {
+      console.error("Gemini returned invalid data structure:", responseText);
+      throw new Error("Invalid data format received from AI.");
+    }
+
     return {
-      currentPrice: Number(rawData.currentPrice) || 0,
-      suggestedBuy: Number(rawData.suggestedBuy) || 0,
-      suggestedSell: Number(rawData.suggestedSell) || 0,
+      currentPrice: rawData.currentPrice,
+      suggestedBuy: rawData.suggestedBuy || rawData.currentPrice * 0.95,
+      suggestedSell: rawData.suggestedSell || rawData.currentPrice * 1.10,
       sources,
     };
   } catch (error: any) {
-    console.error("Quote Fetch Error:", error);
-    // Propagate configuration errors specifically
+    console.error("Stock Quote Fetch Error:", error);
+    // Return zeros only if there is a genuine failure, 
+    // but propagate config errors so the UI can show the Setup prompt.
     if (error.message.includes("Configuration Required")) throw error;
+    
     return {
       currentPrice: 0,
       suggestedBuy: 0,
@@ -133,16 +114,15 @@ export const analyzeStockPosition = async (
   try {
     const ai = getAIClient();
     const strategyInstructions = strategy === 'intraday' 
-      ? "Prioritize today's technical levels, immediate volume spikes, and hourly resistance points."
-      : "Focus on sector trends, fundamental strength, and a 5-10 day trend analysis.";
+      ? "Prioritize today's technical levels and immediate resistance."
+      : "Focus on fundamental strength and sector outlook.";
 
     const analysisPrompt = `
-      Deep dive analysis for "${symbol}" (${quantity} units @ ₹${buyPrice}). 
-      Strategy Mode: ${strategy}. 
+      Deep analysis for "${symbol}" (${quantity} units @ ₹${buyPrice}). Strategy: ${strategy}. 
       ${strategyInstructions}
       
-      You MUST provide:
-      1. NEWS_ITEM: Headline | Summary | Sentiment (Positive/Negative/Neutral) [Min 3 items]
+      Requirements:
+      1. NEWS_ITEM: Headline | Summary | Sentiment (Positive/Negative/Neutral)
       2. CURRENT_PRICE: Estimated live value.
       3. FINAL_RECOMMENDATION: SIGNAL (STRONG_BUY/STRONG_SELL/NEUTRAL/WAIT) | PRICE | REASON
       4. Detailed reasoning in Markdown.
@@ -153,14 +133,11 @@ export const analyzeStockPosition = async (
       contents: analysisPrompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a professional equity researcher. Use Google Search grounding to verify all claims and news. Provide high-conviction signals.",
+        systemInstruction: "You are a professional equity researcher. Use Google Search grounding to verify all news and prices.",
       },
     });
 
-    const chartPrompt = `
-      Project the next 7 specific price points for "${symbol}" based on current momentum. 
-      Return only a JSON array: [{"label": "Day 1", "price": 123.4}, ...]
-    `;
+    const chartPrompt = `Project the next 7 specific price points for "${symbol}". Return only a JSON array: [{"label": "Day 1", "price": 123.4}, ...]`;
 
     const chartResponse = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -181,17 +158,13 @@ export const analyzeStockPosition = async (
       },
     });
 
-    let analysisText = analysisResponse.text || "Analysis pending...";
-    
+    let analysisText = analysisResponse.text || "Analysis failed.";
     const sources: GroundingSource[] = [];
     const chunks = analysisResponse.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
       chunks.forEach((chunk: any) => {
         if (chunk.web?.uri && chunk.web?.title) {
-          sources.push({
-            title: chunk.web.title,
-            uri: chunk.web.uri,
-          });
+          sources.push({ title: chunk.web.title, uri: chunk.web.uri });
         }
       });
     }
@@ -203,7 +176,7 @@ export const analyzeStockPosition = async (
       news.push({
         headline: match[1].trim(),
         summary: match[2].trim(),
-        sentiment: match[3].trim().toLowerCase() as 'positive' | 'negative' | 'neutral',
+        sentiment: match[3].trim().toLowerCase() as any,
       });
     }
 
@@ -240,25 +213,18 @@ export const analyzeStockPosition = async (
       }));
     }
 
-    let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
-    if (currentPriceEstimate) {
-      if (currentPriceEstimate > buyPrice) sentiment = 'bullish';
-      else if (currentPriceEstimate < buyPrice) sentiment = 'bearish';
-    }
-
     return {
       analysisText,
       sources,
       chartData,
       currentPriceEstimate,
-      sentiment,
+      sentiment: (currentPriceEstimate || 0) >= buyPrice ? 'bullish' : 'bearish',
       news,
       recommendation
     };
-
   } catch (error: any) {
     console.error("Gemini Analysis Error:", error);
     if (error.message.includes("Configuration Required")) throw error;
-    throw new Error("Market Intelligence Link Interrupted. Please check your network or try again.");
+    throw new Error("Market Intelligence Link Interrupted. Please check your API Key and network.");
   }
 };
