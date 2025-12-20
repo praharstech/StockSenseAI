@@ -64,10 +64,10 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
 
     const prompt = `
       Perform a search for the LATEST real-time share price of "${searchSymbol}" on the NSE or BSE India.
-      Find the current price, 52-week low, and target price.
+      Find the current price, a support level for suggested buy, and a short-term target price.
       
       Return ONLY a JSON object:
-      {"currentPrice": number_or_string, "suggestedBuy": number_or_string, "suggestedSell": number_or_string}
+      {"currentPrice": number, "suggestedBuy": number, "suggestedSell": number}
     `;
 
     const response = await ai.models.generateContent({
@@ -75,19 +75,19 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "You are a professional financial data extractor for Indian stocks. Return raw numeric data in JSON. If exact prices are unavailable, provide the most recent quoted price from the search results.",
+        systemInstruction: "You are a professional financial data extractor for Indian stocks. Return raw numeric data in JSON. If exact prices are unavailable, provide the most recent quoted price from the search results. If you hit a limit or cannot find it, do not return 0, instead explain why in the text part.",
       },
     });
 
     const responseText = response.text || "";
     let rawData = extractJson(responseText);
 
-    // Heuristic Fallback: If JSON extraction failed, look for numbers in the text
+    // Heuristic Fallback: If JSON extraction failed, look for numbers in the text that look like prices
     if (!rawData || !cleanNumber(rawData.currentPrice)) {
-      const numbers = responseText.match(/\d{1,3}(?:,\d{3})*(?:\.\d+)?/g);
+      const numbers = responseText.match(/\d{1,5}(?:,\d{3})*(?:\.\d+)?/g);
       if (numbers && numbers.length >= 1) {
         const price = cleanNumber(numbers[0]);
-        if (price > 0) {
+        if (price > 1) { // Avoid picking up small numbers that aren't stock prices
           rawData = {
             currentPrice: price,
             suggestedBuy: price * 0.96,
@@ -110,7 +110,7 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
     const currentPrice = cleanNumber(rawData?.currentPrice);
 
     if (currentPrice <= 0) {
-      throw new Error(`Data Unavailable: Could not fetch real-time price for ${symbol}. Please verify the ticker or try again later.`);
+      throw new Error(`Price for ${symbol} not found. Please ensure the ticker is correct (e.g., ADANIPOWER or RELIANCE).`);
     }
 
     return {
@@ -121,6 +121,12 @@ export const getStockQuote = async (symbol: string): Promise<StockQuote> => {
     };
   } catch (error: any) {
     console.error("Stock Quote Fetch Error:", error);
+    
+    // Handle Quota Limit Specifically
+    if (error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+      throw new Error("API Quota Exhausted: You have reached the Gemini API limit. Please wait a minute or use a different API key.");
+    }
+
     if (error.message.includes("Configuration Required")) throw error;
     throw error;
   }
@@ -247,6 +253,9 @@ export const analyzeStockPosition = async (
     };
   } catch (error: any) {
     console.error("Gemini Analysis Error:", error);
+    if (error.message?.includes('429')) {
+      throw new Error("Quota Full: Gemini Pro has reached its hourly limit. Try again in a few minutes.");
+    }
     if (error.message.includes("Configuration Required")) throw error;
     throw new Error("Intelligence link interrupted. Please verify your connection or API configuration.");
   }
